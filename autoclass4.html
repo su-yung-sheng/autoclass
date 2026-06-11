@@ -3,59 +3,1174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>5016B 模擬影片評分系統</title>
+    <title>AI 跨模態視覺檢核系統 V6 (Classroom 整合版)</title>
+    <!-- React 18 & Babel Standalone -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        .score-pop { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
+
+    <!-- 🌟 Firebase 初始化模組 -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyB-BwDBWaAMM7_-dHQui78cntZ4fi_ydxY",
+          authDomain: "colabprogram-c8014.firebaseapp.com",
+          projectId: "colabprogram-c8014",
+          storageBucket: "colabprogram-c8014.firebasestorage.app",
+          messagingSenderId: "900230173526",
+          appId: "1:900230173526:web:4d176bea3f637c30b33cf7"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.fbInstances = { auth, db, doc, setDoc, getDoc, onSnapshot, collection, getDocs, signInAnonymously, onAuthStateChanged };
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
 </head>
-<body class="bg-gray-100 min-h-screen p-4">
+<body class="bg-slate-100 h-screen flex flex-col p-2 md:p-4 overflow-hidden text-slate-800">
 
     <!-- ========================================== -->
-    <!-- 🟢 系統主畫面                               -->
+    <!-- 🟢 系統頂部導覽列 (整合 a04.txt 外觀)       -->
     <!-- ========================================== -->
-    <div class="max-w-7xl mx-auto mt-2">
-        <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm">
-            <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
+    <div class="max-w-[1600px] mx-auto w-full shrink-0 mb-4">
+        <div class="flex justify-center items-center bg-white p-3 rounded-t-xl border-b shadow-sm">
+            <h1 class="text-xl md:text-2xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
             </h1>
         </div>
 
-        <!-- 🌟 跨檔案相對路徑導覽選單 🌟 -->
-        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto border-b border-gray-700">
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+        <div class="bg-gray-800 px-4 pt-2 flex overflow-x-auto border-b border-gray-700 rounded-b-xl shadow-md custom-scrollbar">
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
             </a>
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
-                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分系統
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分
             </a>
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
-                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片評分系統
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片
             </a>
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass4.html" class="px-6 py-3 font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
-                <i class="fa-solid fa-video text-lg"></i> 4. 5016B 模擬影片評分系統
+            <a href="#" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
+                <i class="fa-solid fa-video text-lg"></i> 4. AI 跨模態視覺檢核 V6
             </a>
-        </div>
-
-        <!-- 影片系統預留區主面板 -->
-        <div class="bg-white shadow-lg rounded-b-xl overflow-hidden min-h-[600px] p-8 md:p-12 flex flex-col justify-center items-center">
-            <div class="max-w-2xl text-center space-y-6">
-                <div class="w-32 h-32 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-6xl mx-auto mb-6 border-4 border-white shadow-md">
-                    <i class="fa-solid fa-video"></i>
-                </div>
-                <h2 class="text-3xl font-black text-slate-800 tracking-tight">4. 5016B 模擬影片評分系統</h2>
-                <p class="text-lg text-slate-500 leading-relaxed">
-                    本模組即將對接 5016B 影音辨識引擎！<br>
-                    支援自動讀取學生的 <code>.mp4</code> 影片操作演示與口說報告，進行人臉辨識、語音清晰度判定以及自動給分功能。
-                </p>
-                <div class="pt-6 border-t border-slate-200 mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                    <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-md flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-house"></i> 回到 Classroom 管理
-                    </a>
-                </div>
-            </div>
         </div>
     </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 React V6 應用程式掛載點                 -->
+    <!-- ========================================== -->
+    <div id="root" class="w-full flex-1 max-w-[1600px] mx-auto overflow-hidden relative"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- GAS 輔助連線函式 ---
+        const GAS_URL = "https://script.google.com/a/macros/mail.qfm.kh.edu.tw/s/AKfycbydRpN2hbYelUy9sAvTYh26JlK_DBpA5NrAN-jmepXRjG4oBnGy4TTT2NWktLK4JdzSyA/exec";
+        let jsonpCounter = 0;
+        const fetchJSONP = (url) => {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + Date.now() + '_' + (jsonpCounter++);
+                const script = document.createElement('script');
+                const timeoutId = setTimeout(() => { cleanup(); reject(new Error("伺服器請求超時！")); }, 30000);
+                function cleanup() { delete window[callbackName]; if (script.parentNode) document.body.removeChild(script); }
+                window[callbackName] = function(data) { clearTimeout(timeoutId); cleanup(); resolve(data); };
+                const sep = url.includes('?') ? '&' : '?';
+                script.src = `${url}${sep}callback=${callbackName}`;
+                script.onerror = function() { clearTimeout(timeoutId); cleanup(); reject(new Error("網路連線失敗。")); };
+                document.body.appendChild(script);
+            });
+        };
+
+        const App = () => {
+            const [appMode, setAppMode] = useState('student');
+            const [analysisEngine, setAnalysisEngine] = useState('state'); 
+            const [backendUrl, setBackendUrl] = useState('https://flanking-snort-cyclic.ngrok-free.dev'); 
+            
+            const [backendStatus, setBackendStatus] = useState('checking'); 
+            const [firebaseReady, setFirebaseReady] = useState(!!window.fbInstances);
+            const [user, setUser] = useState(null);
+            const [cloudSyncStatus, setCloudSyncStatus] = useState('connecting'); 
+            
+            const defaultTasks = ['1.8x8 LED矩陣', '2.LED 燈條', '3.直流减速馬達'];
+            const [classCode, setClassCode] = useState('yssu'); 
+            const [taskList, setTaskList] = useState(defaultTasks); 
+            const [currentTask, setCurrentTask] = useState(defaultTasks[0]); 
+            const [isAddingTask, setIsAddingTask] = useState(false);
+            const [newTaskName, setNewTaskName] = useState('');
+
+            const [showClearConfirm, setShowClearConfirm] = useState(false); 
+            const [showTemplateContent, setShowTemplateContent] = useState(false);
+
+            const [studentId, setStudentId] = useState('');
+
+            const [videoFile, setVideoFile] = useState(null);
+            const [previewUrl, setPreviewUrl] = useState(null);
+            const [status, setStatus] = useState('idle'); 
+            const [resultHistory, setResultHistory] = useState([]);
+            const [progressInfo, setProgressInfo] = useState({ current: 0, total: 0, percent: 0 });
+            const [errorMessage, setErrorMessage] = useState('');
+            const [queueMsg, setQueueMsg] = useState(''); 
+
+            const [templatePool, setTemplatePool] = useState([]); 
+            const [studentSequence, setStudentSequence] = useState([]); 
+            const [bestMatchResult, setBestMatchResult] = useState(null); 
+            const [strictMode, setStrictMode] = useState(true);
+            const [stateSensitivity, setStateSensitivity] = useState(3.0);   
+
+            const [roi, setRoi] = useState({ x: 50, y: 50, w: 150, h: 100 });
+            const [videoInfo, setVideoInfo] = useState({ width: 1, height: 1 });
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragType, setDragType] = useState(null);
+            const [dragStart, setDragStart] = useState({ x: 0, y: 0, roiX: 0, roiY: 0, roiW: 0, roiH: 0 });
+            const [config, setConfig] = useState({ invertColor: true }); 
+            
+            // 🌟 Classroom 整合狀態 🌟
+            const [showGasModal, setShowGasModal] = useState(false);
+            const [gasStep, setGasStep] = useState('courses'); // courses, assignments
+            const [gasCourses, setGasCourses] = useState([]);
+            const [gasAssignments, setGasAssignments] = useState([]);
+            const [gasCurrentCourse, setGasCurrentCourse] = useState(null);
+            const [gasCurrentAssignment, setGasCurrentAssignment] = useState(null);
+            const [gasLoading, setGasLoading] = useState(false);
+            const [gasLoadingText, setGasLoadingText] = useState('');
+            const [classroomSubmissions, setClassroomSubmissions] = useState([]);
+            const [currentSubmissionIndex, setCurrentSubmissionIndex] = useState(-1);
+            const [writeBackScore, setWriteBackScore] = useState(true);
+
+            const videoRef = useRef(null);
+            const abortControllerRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            // --- Firebase 初始化區塊 ---
+            useEffect(() => {
+                const handleFbReady = () => setFirebaseReady(true);
+                window.addEventListener('firebase-ready', handleFbReady);
+                return () => window.removeEventListener('firebase-ready', handleFbReady);
+            }, []);
+
+            useEffect(() => {
+                if (!firebaseReady) return;
+                const { auth, signInAnonymously, onAuthStateChanged } = window.fbInstances;
+                signInAnonymously(auth).catch(err => console.error("登入失敗:", err));
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                return () => unsubscribe();
+            }, [firebaseReady]);
+
+            useEffect(() => {
+                if (!user || !firebaseReady || !classCode.trim()) return;
+                const { db, doc, onSnapshot } = window.fbInstances;
+                const classRef = doc(db, 'VisionClassrooms', classCode.trim());
+                
+                const unsubscribe = onSnapshot(classRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        const fetchedTasks = data.tasks || [];
+                        const mergedTasks = Array.from(new Set([...defaultTasks, ...fetchedTasks]));
+                        setTaskList(mergedTasks);
+                        setCurrentTask(prev => (!prev || !mergedTasks.includes(prev)) ? mergedTasks[0] : prev);
+                    } else {
+                        setTaskList(defaultTasks);
+                        setCurrentTask(prev => (!prev || !defaultTasks.includes(prev)) ? defaultTasks[0] : prev);
+                    }
+                });
+                return () => unsubscribe();
+            }, [user, firebaseReady, classCode]);
+
+            useEffect(() => {
+                if (!user || !firebaseReady || !classCode.trim() || !currentTask) {
+                    setTemplatePool([]); setCloudSyncStatus('no-template'); return;
+                }
+                const { db, doc, onSnapshot } = window.fbInstances;
+                const taskRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Tasks', currentTask);
+                setCloudSyncStatus('connecting');
+
+                const unsubscribe = onSnapshot(taskRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        let parsedTemplates = [];
+                        if (data.templates && Array.isArray(data.templates)) {
+                            parsedTemplates = data.templates.map(t => typeof t === 'string' ? JSON.parse(t) : t);
+                        }
+                        setTemplatePool(parsedTemplates);
+                        setAnalysisEngine(data.engine || 'state');
+                        if (data.sensitivity) setStateSensitivity(data.sensitivity);
+                        if (data.roi) setRoi(data.roi);
+                        if (data.strictMode !== undefined) {
+                            setStrictMode(data.strictMode);
+                        } else {
+                            setStrictMode(data.engine === 'ocr' || data.engine === 'color');
+                        }
+                        if (data.config) setConfig(data.config); 
+                        setCloudSyncStatus(parsedTemplates.length > 0 ? 'synced' : 'no-template');
+                    } else {
+                        setCloudSyncStatus('no-template'); setTemplatePool([]);
+                    }
+                });
+                return () => unsubscribe();
+            }, [user, firebaseReady, classCode, currentTask]);
+
+            // --- Classroom 互動區塊 ---
+            const loadGasCourses = async () => {
+                setShowGasModal(true);
+                setGasStep('courses');
+                setGasLoading(true);
+                setGasLoadingText("正在讀取 Classroom 課程清單...");
+                try {
+                    const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
+                    if(data.status === 'error') throw new Error(data.message);
+                    setGasCourses(data.courses || []);
+                } catch (err) {
+                    alert("課程讀取失敗: " + err.message);
+                } finally { setGasLoading(false); }
+            };
+
+            const loadGasAssignments = async (course) => {
+                setGasCurrentCourse(course);
+                setGasStep('assignments');
+                setGasLoading(true);
+                setGasLoadingText(`正在讀取「${course.name}」的作業清單...`);
+                try {
+                    const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${course.id}`);
+                    if(data.status === 'error') throw new Error(data.message);
+                    setGasAssignments(data.assignments || []);
+                } catch (err) {
+                    alert("作業讀取失敗: " + err.message);
+                } finally { setGasLoading(false); }
+            };
+
+            const loadGasSubmissions = async (assignment) => {
+                setGasCurrentAssignment(assignment);
+                setGasLoading(true);
+                setGasLoadingText("正在提取影片繳交名單...");
+                try {
+                    const data = await fetchJSONP(`${GAS_URL}?action=getSubmissions&courseId=${gasCurrentCourse.id}&courseWorkId=${assignment.id}`);
+                    if(data.status === 'error') throw new Error(data.message);
+                    
+                    const allFiles = data.files || [];
+                    // 篩選影片檔案
+                    const videos = allFiles.filter(f => /\.(mp4|mov|webm|avi)$/i.test(f.name));
+                    
+                    videos.sort((a, b) => {
+                        const numA = a.name.match(/\d+/) ? parseInt(a.name.match(/\d+/)[0], 10) : 99999;
+                        const numB = b.name.match(/\d+/) ? parseInt(b.name.match(/\d+/)[0], 10) : 99999;
+                        if (numA !== numB) return numA - numB;
+                        return a.name.localeCompare(b.name, 'zh-TW');
+                    });
+
+                    setClassroomSubmissions(videos);
+                    setCurrentSubmissionIndex(-1);
+                    setShowGasModal(false);
+                    if (videos.length === 0) alert("此作業中找不到任何學生繳交的影片檔案。");
+                } catch (err) {
+                    alert("名單載入失敗: " + err.message);
+                } finally { setGasLoading(false); }
+            };
+
+            const loadStudentVideo = async (sub, idx) => {
+                setCurrentSubmissionIndex(idx);
+                setStatus('connecting');
+                setErrorMessage('');
+                setResultHistory([]); setBestMatchResult(null); setPreviewUrl(null); setVideoFile(null);
+                
+                // 解析學號
+                const match = sub.name.match(/\d{7}/);
+                if (match) setStudentId(match[0]);
+                else { const b = sub.name.split('.').slice(0, -1).join('.'); setStudentId(b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7)); }
+
+                try {
+                    const tokenRes = await fetchJSONP(`${GAS_URL}?action=getToken`);
+                    if (tokenRes.status === 'error' || !tokenRes.token) throw new Error("取得 Classroom 授權 Token 失敗，請點擊上方授權按鈕。");
+                    
+                    const fileUrl = `https://www.googleapis.com/drive/v3/files/${sub.id}?alt=media`;
+                    const res = await fetch(fileUrl, { headers: { 'Authorization': 'Bearer ' + tokenRes.token } });
+                    if (!res.ok) throw new Error(`Google API 拒絕存取 (${res.status})`);
+                    
+                    const blob = await res.blob();
+                    const videoFileObj = new File([blob], sub.name, { type: blob.type || "video/mp4" });
+                    
+                    setVideoFile(videoFileObj);
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(URL.createObjectURL(blob));
+                    setStatus('idle');
+                } catch(e) {
+                    setErrorMessage("載入串流影片失敗: " + e.message);
+                    setStatus('error');
+                }
+            };
+
+            const handleManualUpload = (e) => {
+                if(e.target.files[0]){
+                    const file = e.target.files[0];
+                    setVideoFile(file); setPreviewUrl(URL.createObjectURL(file));
+                    setStatus('idle'); setResultHistory([]); setErrorMessage(''); setBestMatchResult(null); setStudentSequence([]); setQueueMsg('');
+                    // 解除 Classroom 名單鎖定
+                    setCurrentSubmissionIndex(-1);
+                    if (appMode === 'student') {
+                        const match = file.name.match(/\d{7}/);
+                        if (match) setStudentId(match[0]);
+                        else { const b = file.name.split('.').slice(0, -1).join('.'); setStudentId(b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7)); }
+                    }
+                }
+            };
+
+
+            const parseStudentId = (id) => {
+                if (!id || id.length !== 7) return null;
+                const clsStr = id.substring(3, 5); 
+                const numStr = id.substring(5, 7); 
+                return { className: `7${clsStr}`, number: numStr };
+            };
+
+            const handleAddTask = async () => {
+                if (!newTaskName.trim() || !classCode.trim()) return;
+                try {
+                    const { db, doc, setDoc } = window.fbInstances;
+                    const classRef = doc(db, 'VisionClassrooms', classCode.trim());
+                    const newTasks = [...taskList, newTaskName.trim()];
+                    await setDoc(classRef, { tasks: newTasks }, { merge: true });
+                    setCurrentTask(newTaskName.trim());
+                    setNewTaskName(''); setIsAddingTask(false);
+                } catch (err) { alert("新增關卡失敗: " + err.message); }
+            };
+
+            const handleModeSwitch = (mode) => {
+                if (mode === 'student' && templatePool.length === 0) {
+                    alert("雲端範本庫目前為空！請先在「教師模式」錄製並新增至少一組標準。"); return;
+                }
+                setAppMode(mode); setVideoFile(null); setPreviewUrl(null); setStatus('idle');
+                setResultHistory([]); setStudentSequence([]); setBestMatchResult(null); setStudentId('');
+                setClassroomSubmissions([]); setCurrentSubmissionIndex(-1);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                if (videoRef.current) videoRef.current.src = "";
+            };
+
+            const clearTemplatePool = async () => {
+                try {
+                    const { db, doc, setDoc } = window.fbInstances;
+                    const taskRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Tasks', currentTask);
+                    await setDoc(taskRef, { templates: [], engine: analysisEngine, roi: roi, config: config }, { merge: true });
+                    setShowClearConfirm(false);
+                    alert("🗑️ 範本庫已成功清空！");
+                } catch (err) { alert("清空失敗：" + err.message); }
+            };
+
+            const saveSettingsOnly = async () => {
+                try {
+                    const { db, doc, setDoc } = window.fbInstances;
+                    const taskRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Tasks', currentTask);
+                    
+                    await setDoc(taskRef, {
+                        engine: analysisEngine,
+                        sensitivity: stateSensitivity,
+                        strictMode: strictMode,
+                        config: config,
+                        roi: roi,
+                        updatedAt: new Date().toISOString()
+                    }, { merge: true });
+                    
+                    alert(`✅ 已成功更新「${currentTask}」的評分原則與綠框！\n無須重新建檔，學生端將立刻套用新標準。`);
+                } catch (err) {
+                    console.error("更新設定失敗", err);
+                    alert("更新設定失敗：" + err.message);
+                }
+            };
+
+            const saveStudentScore = async (finalScore) => {
+                if (appMode !== 'student' || !window.fbInstances || !user) return;
+                
+                // 1. 同步寫回 Firebase 雲端儀表板
+                const parsed = parseStudentId(studentId);
+                if (parsed) {
+                    try {
+                        const { db, doc, getDoc, setDoc } = window.fbInstances;
+                        const scoreRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Scores', `${currentTask}_${parsed.className}_${parsed.number}`);
+                        
+                        const docSnap = await getDoc(scoreRef);
+                        let shouldSave = true;
+                        if (docSnap.exists()) {
+                            const oldScore = docSnap.data().score || 0;
+                            if (finalScore <= oldScore) shouldSave = false;
+                        }
+
+                        if (shouldSave) {
+                            await setDoc(scoreRef, {
+                                studentId: studentId,
+                                className: parsed.className,
+                                number: parsed.number,
+                                score: finalScore,
+                                updatedAt: new Date().toISOString()
+                            }, { merge: true });
+                        }
+                    } catch (e) {
+                        console.error("成績寫入 Firebase 失敗", e);
+                    }
+                }
+
+                // 2. 🌟 同步寫回 Google Classroom (如果來源是從 Classroom 匯入的)
+                if (writeBackScore && classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
+                    const sub = classroomSubmissions[currentSubmissionIndex];
+                    if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
+                        try {
+                            console.log(`正在將 ${finalScore} 分同步至 Classroom...`);
+                            await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
+                            console.log("Classroom 成績同步完成");
+                        } catch (e) {
+                            console.error("Classroom 成績同步失敗:", e);
+                        }
+                    }
+                }
+            };
+
+            const updateVideoDimensions = () => {
+                if (videoRef.current && videoRef.current.videoWidth) {
+                    setVideoInfo({ width: videoRef.current.videoWidth, height: videoRef.current.videoHeight });
+                }
+            };
+            useEffect(() => { window.addEventListener('resize', updateVideoDimensions); return () => window.removeEventListener('resize', updateVideoDimensions); }, []);
+
+            useEffect(() => {
+                const handleMouseMove = (e) => {
+                    if (!isDragging || !videoRef.current || appMode === 'student') return;
+                    const videoRect = videoRef.current.getBoundingClientRect();
+                    const scaleX = videoInfo.width / videoRect.width;
+                    const scaleY = videoInfo.height / videoRect.height;
+                    const deltaX = (e.clientX - dragStart.x) * scaleX;
+                    const deltaY = (e.clientY - dragStart.y) * scaleY;
+
+                    if (dragType === 'move') {
+                        let newX = Math.max(0, Math.min(Math.round(dragStart.roiX + deltaX), videoInfo.width - dragStart.roiW));
+                        let newY = Math.max(0, Math.min(Math.round(dragStart.roiY + deltaY), videoInfo.height - dragStart.roiH));
+                        setRoi(prev => ({ ...prev, x: newX, y: newY }));
+                    } else if (dragType === 'resize') {
+                        let newW = Math.max(20, Math.min(Math.round(dragStart.roiW + deltaX), videoInfo.width - dragStart.roiX));
+                        let newH = Math.max(20, Math.min(Math.round(dragStart.roiH + deltaY), videoInfo.height - dragStart.roiY));
+                        setRoi(prev => ({ ...prev, w: newW, h: newH }));
+                    }
+                };
+                const handleMouseUp = () => setIsDragging(false);
+                if (isDragging) { document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp); }
+                return () => { document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp); };
+            }, [isDragging, dragType, dragStart, videoInfo, appMode]);
+
+            const handleMouseDown = (e, type) => {
+                if (appMode === 'student') return; 
+                e.preventDefault(); e.stopPropagation();
+                setIsDragging(true); setDragType(type);
+                setDragStart({ x: e.clientX, y: e.clientY, roiX: roi.x, roiY: roi.y, roiW: roi.w, roiH: roi.h });
+            };
+
+            useEffect(() => {
+                let interval;
+                const checkConnection = async () => {
+                    if (!backendUrl) return;
+                    try {
+                        let cleanUrl = backendUrl.trim();
+                        if (!cleanUrl.startsWith('http')) cleanUrl = 'https://' + cleanUrl;
+                        const res = await fetch(`${cleanUrl.replace(/\/$/, '')}/api/analyze-video`, { 
+                            method: 'GET', headers: { 'ngrok-skip-browser-warning': 'true' }
+                        });
+                        if (res.ok || res.status === 405 || res.status === 404 || res.status === 422) setBackendStatus('online');
+                        else setBackendStatus('offline');
+                    } catch (error) { setBackendStatus('offline'); }
+                };
+                if (status !== 'analyzing' && status !== 'queued') { checkConnection(); interval = setInterval(checkConnection, 10000); }
+                return () => { if (interval) clearInterval(interval); };
+            }, [backendUrl, status]);
+
+            const calculateBestMatch = (studentSeq) => {
+                if (templatePool.length === 0) return null;
+                let bestMatch = { score: -1, matched: 0, extra: 0, templateIndex: 0, totalSteps: 0 };
+                
+                templatePool.forEach((templateSeq, index) => {
+                    if (!Array.isArray(templateSeq)) return;
+                    let matched = 0; let extra = 0;
+                    
+                    if (strictMode) {
+                        for (let i = 0; i < studentSeq.length; i++) {
+                            if (i < templateSeq.length) {
+                                const sVal = String(studentSeq[i]).trim();
+                                const tVal = String(templateSeq[i]).trim();
+                                
+                                if (sVal.startsWith('狀態變更') && tVal.startsWith('狀態變更')) {
+                                    const sMatch = sVal.match(/[\d.]+/);
+                                    const tMatch = tVal.match(/[\d.]+/);
+                                    if (sMatch && tMatch) {
+                                        const sRatio = parseFloat(sMatch[0]);
+                                        const tRatio = parseFloat(tMatch[0]);
+                                        // 容忍 35% 的面積差異
+                                        if (Math.abs(sRatio - tRatio) <= 35) {
+                                            matched++;
+                                        } else {
+                                            extra++;
+                                        }
+                                    } else {
+                                        matched++;
+                                    }
+                                } else {
+                                    const cleanStudentStr = sVal.replace(/\s+/g, '');
+                                    const cleanTemplateStr = tVal.replace(/\s+/g, '');
+                                    if (cleanStudentStr === cleanTemplateStr) matched++;
+                                    else extra++;
+                                }
+                            } else {
+                                extra++;
+                            }
+                        }
+                    } else {
+                        matched = Math.min(studentSeq.length, templateSeq.length);
+                        extra = Math.max(0, studentSeq.length - templateSeq.length);
+                    }
+                    
+                    let baseScore = templateSeq.length > 0 ? Math.round((matched / templateSeq.length) * 100) : 100;
+                    let penalty = extra * 10;
+                    let finalScore = Math.max(0, baseScore - penalty);
+                    if (finalScore > bestMatch.score) {
+                        bestMatch = { score: finalScore, matched, extra, templateIndex: index + 1, totalSteps: templateSeq.length };
+                    }
+                });
+                return bestMatch.score === -1 ? null : bestMatch;
+            };
+
+            const handleResetUI = () => {
+                setStatus('idle'); 
+                setBestMatchResult(null); setProgressInfo({ current: 0, total: 0, percent: 0 });
+                setResultHistory([]); setStudentSequence([]); setQueueMsg('');
+                
+                // 如果是在 Classroom 名單中，且不是最後一個，我們可以直接幫他載入下一個！
+                if (appMode === 'student' && classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
+                    if (currentSubmissionIndex < classroomSubmissions.length - 1) {
+                        loadStudentVideo(classroomSubmissions[currentSubmissionIndex + 1], currentSubmissionIndex + 1);
+                    } else {
+                        alert("這已經是最後一位學生了！");
+                        setVideoFile(null); setPreviewUrl(null); 
+                    }
+                } else {
+                    setVideoFile(null); setPreviewUrl(null); 
+                    if (fileInputRef.current) fileInputRef.current.value = ''; 
+                }
+            };
+
+            const startAnalysis = async () => {
+                if (!videoFile || !backendUrl || !currentTask) return;
+                if (appMode === 'student' && (!studentId || studentId.length !== 7 || !parseStudentId(studentId))) {
+                    setErrorMessage("請輸入正確的 7 碼學號！(影片檔名中若無學號，請手動輸入)"); setStatus('error'); return;
+                }
+                if (videoFile.size > 50 * 1024 * 1024) {
+                    setErrorMessage("影片過大 (超過 50MB)，請剪輯後再上傳。"); setStatus('error'); return;
+                }
+                
+                let localTaskStatus = 'connecting';
+                setStatus('connecting'); setResultHistory([]); setErrorMessage(''); 
+                setProgressInfo({ current: 0, total: 0, percent: 0 }); setStudentSequence([]);
+                setBestMatchResult(null); setQueueMsg('');
+
+                let lastValue = null; 
+                let lastTextValue = null; 
+                let lastRatioValue = null;
+                let historyList = []; let studentCurrentSeq = []; 
+
+                if (abortControllerRef.current) abortControllerRef.current.abort();
+                abortControllerRef.current = new AbortController();
+
+                try {
+                    const formData = new FormData();
+                    formData.append('file', videoFile);
+                    formData.append('roi', JSON.stringify(roi));
+                    formData.append('config', JSON.stringify(config));
+                    formData.append('engine', analysisEngine);
+
+                    let cleanUrl = backendUrl.trim();
+                    if (!cleanUrl.startsWith('http')) cleanUrl = 'https://' + cleanUrl;
+                    const response = await fetch(`${cleanUrl.replace(/\/$/, '')}/api/analyze-video`, {
+                        method: 'POST', body: formData, signal: abortControllerRef.current.signal,
+                    });
+
+                    if (!response.ok) throw new Error("伺服器回應異常，請稍後再試。");
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.error) throw new Error(data.error);
+                                
+                                if (data.status === 'queued') {
+                                    localTaskStatus = 'queued'; setStatus('queued'); setQueueMsg(data.message); continue;
+                                }
+                                if (data.status === 'processing') {
+                                    localTaskStatus = 'analyzing'; setStatus('analyzing'); setQueueMsg(''); continue;
+                                }
+                                
+                                if (data.progress !== undefined) {
+                                    setProgressInfo({ current: data.current_time || 0, total: data.total_duration || 0, percent: data.progress });
+                                }
+                                
+                                if (data.status === 'finished') {
+                                    localTaskStatus = 'success'; setStatus('success');
+                                    if (appMode === 'student') {
+                                        const best = calculateBestMatch(studentCurrentSeq);
+                                        setBestMatchResult(best);
+                                        if (best) saveStudentScore(best.score);
+                                    }
+                                    break;
+                                }
+
+                                const currentText = data.text || "";
+                                const currentRatio = data.pixel_ratio !== undefined ? data.pixel_ratio : null;
+                                let isTriggered = false; let displayDetail = ""; let milestoneValue = "";
+
+                                if (analysisEngine === 'motion' && currentRatio !== null) {
+                                    let isMoving = currentRatio >= stateSensitivity;
+                                    let currentStateStr = isMoving ? "旋轉中" : "靜止";
+                                    
+                                    if (lastRatioValue === null) {
+                                        lastRatioValue = currentStateStr;
+                                    } else if (lastRatioValue !== currentStateStr) {
+                                        isTriggered = true;
+                                        displayDetail = `畫面變動率: ${currentRatio}% ➡️ ${currentStateStr}`;
+                                        milestoneValue = `馬達狀態:${currentStateStr}`;
+                                        lastRatioValue = currentStateStr;
+                                    }
+                                }
+                                else if (analysisEngine === 'state' && currentRatio !== null) {
+                                    if (lastRatioValue === null) lastRatioValue = currentRatio;
+                                    else {
+                                        const delta = Math.abs(currentRatio - lastRatioValue);
+                                        if (delta >= stateSensitivity) {
+                                            isTriggered = true;
+                                            displayDetail = `發光率: ${lastRatioValue}% ➡️ ${currentRatio}%`;
+                                            milestoneValue = `狀態變更(充填率:${currentRatio}%)`;
+                                            lastRatioValue = currentRatio;
+                                        }
+                                    }
+                                } 
+                                else if ((analysisEngine === 'ocr' || analysisEngine === 'color') && currentText) {
+                                    if (currentText !== lastTextValue) {
+                                        isTriggered = true;
+                                        displayDetail = `[ ${lastTextValue || '無'} ] ➡️ [ ${currentText} ]`;
+                                        milestoneValue = currentText; lastTextValue = currentText;
+                                    }
+                                }
+
+                                if (isTriggered) {
+                                    let actualValueToStore = milestoneValue;
+                                    if (strictMode && (analysisEngine === 'ocr' || analysisEngine === 'color')) {
+                                        actualValueToStore = currentText;
+                                    }
+
+                                    let ruleTag = appMode === 'teacher' ? `📌 錄製為新特徵` : `🔵 擷取動作 (${studentCurrentSeq.length + 1})`;
+                                    let ruleColor = appMode === 'teacher' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-300 shadow-sm';
+                                    
+                                    if (appMode === 'student') {
+                                        studentCurrentSeq.push(actualValueToStore);
+                                        setStudentSequence([...studentCurrentSeq]);
+                                    }
+                                    
+                                    historyList.push({
+                                        time: data.time.toFixed(1),
+                                        detail: displayDetail,
+                                        raw_snapshot: milestoneValue,
+                                        rule_tag: ruleTag,
+                                        rule_color: ruleColor,
+                                        old_value: lastValue || "無",
+                                        new_value: actualValueToStore
+                                    });
+                                    setResultHistory([...historyList]);
+                                    
+                                    lastValue = actualValueToStore; 
+                                }
+                            } catch (e) {
+                                console.error("資料流解析異常:", e, line);
+                            }
+                        }
+                    }
+
+                    if (appMode === 'teacher') {
+                        const newTemplate = historyList.map(h => h.new_value);
+                        
+                        if (newTemplate.length > 0) {
+                            try {
+                                if (user && window.fbInstances && currentTask) {
+                                    const { db, doc, setDoc } = window.fbInstances;
+                                    const taskRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Tasks', currentTask);
+                                    
+                                    const updatedPool = [...templatePool, newTemplate];
+                                    const serializedPool = updatedPool.map(t => JSON.stringify(t));
+                                    
+                                    await setDoc(taskRef, {
+                                        templates: serializedPool,
+                                        engine: analysisEngine,
+                                        sensitivity: stateSensitivity,
+                                        strictMode: strictMode,
+                                        config: config, 
+                                        roi: roi,
+                                        updatedAt: new Date().toISOString()
+                                    });
+                                    
+                                    setTemplatePool(updatedPool);
+                                    setTimeout(() => alert(`🎉 訓練資料已新增至「${currentTask}」題庫！\n目前已收集 ${updatedPool.length} 組容錯特徵。`), 400);
+                                }
+                            } catch (err) {
+                                console.error("Firebase 寫入失敗", err);
+                                setErrorMessage("⚠️ 雲端連線失敗，無法儲存範本。");
+                                localTaskStatus = 'error';
+                                setStatus('error');
+                            }
+                        } else {
+                            if (analysisEngine === 'motion') {
+                                setErrorMessage("⚠️ 影片中沒有偵測到轉動，未新增至題庫。\n💡 解法：請將綠色方框精準對齊馬達，並確保馬達上有標記物可供辨識。");
+                            } else {
+                                setErrorMessage("⚠️ 影片中沒有偵測到變化，因此未新增至題庫。");
+                            }
+                            localTaskStatus = 'error';
+                            setStatus('error');
+                        }
+                    }
+
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        setErrorMessage("網路連線被切斷。這通常是因為後端當機或排隊逾時。");
+                        localTaskStatus = 'error'; setStatus('error');
+                    } else { localTaskStatus = 'idle'; setStatus('idle'); }
+                } finally {
+                    abortControllerRef.current = null;
+                    if (localTaskStatus !== 'success' && localTaskStatus !== 'error' && localTaskStatus !== 'queued' && localTaskStatus !== 'analyzing') setStatus('idle');
+                }
+            };
+
+            return (
+                <div className="w-full h-full flex flex-col lg:flex-row gap-4 pb-2 p-2 md:p-4 relative">
+                    
+                    {/* 🌟 GAS Classroom 彈窗 */}
+                    {showGasModal && (
+                        <div className="fixed inset-0 bg-black/60 z-[100] flex justify-center items-center backdrop-blur-sm animate-fadeIn">
+                            <div className="bg-white rounded-2xl shadow-2xl w-[600px] max-w-[90vw] overflow-hidden flex flex-col max-h-[85vh]">
+                                <div className="flex justify-between items-center bg-emerald-600 p-4">
+                                    <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                                        <i className="fa-solid fa-chalkboard-user"></i> 瀏覽 Classroom 作業
+                                    </h3>
+                                    <button onClick={() => setShowGasModal(false)} className="text-emerald-100 hover:text-white transition"><i className="fa-solid fa-times text-2xl"></i></button>
+                                </div>
+                                <div className="p-3 bg-emerald-50 text-sm border-b border-emerald-200 flex flex-col gap-2 relative">
+                                    <div className="flex items-center text-emerald-800 font-bold overflow-x-auto whitespace-nowrap custom-scrollbar pb-1 pr-24">
+                                        <button onClick={loadGasCourses} className="hover:text-emerald-600 transition flex items-center"><i className="fa-solid fa-house mr-1"></i>我的課程</button>
+                                        {gasStep === 'assignments' && (
+                                            <>
+                                                <span className="mx-2 text-slate-400">/</span>
+                                                <span className="text-emerald-700 truncate">{gasCurrentCourse?.name}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <button onClick={() => window.open(`${GAS_URL}?action=auth`, '_blank')} className="absolute right-3 top-3 text-[10px] bg-white text-emerald-700 border border-emerald-300 px-2 py-1 rounded font-bold hover:bg-emerald-100 transition shadow-sm">
+                                        <i className="fa-solid fa-key"></i> 先進行授權
+                                    </button>
+                                </div>
+                                <div className="p-4 overflow-y-auto custom-scrollbar flex-grow space-y-2 min-h-[300px]">
+                                    {gasLoading ? (
+                                        <div className="flex justify-center items-center py-12 text-emerald-600 flex-col gap-3">
+                                            <div className="loader border-t-emerald-600"></div>
+                                            <span className="font-bold">{gasLoadingText}</span>
+                                        </div>
+                                    ) : gasStep === 'courses' ? (
+                                        gasCourses.map(c => (
+                                            <button key={c.id} onClick={() => loadGasAssignments(c)} className="w-full text-left p-4 border rounded-xl hover:bg-emerald-50 bg-white shadow-sm transition">
+                                                <div className="font-bold text-slate-800 text-lg">{c.name}</div>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        gasAssignments.map(a => (
+                                            <button key={a.id} onClick={() => loadGasSubmissions(a)} className="w-full text-left p-3 border rounded-xl hover:bg-emerald-50 bg-white shadow-sm transition">
+                                                <div className="font-bold text-slate-700 truncate">{a.title}</div>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+
+                    {/* --- 左欄：控制面板 --- */}
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-5 flex flex-col w-full lg:w-[32%] h-auto lg:h-full overflow-y-auto shrink-0 custom-scrollbar">
+                        <div className="flex justify-between items-center mb-3">
+                            <h2 className="text-lg font-bold text-slate-800">跨模態檢核控制台</h2>
+                            <div className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded-full border border-slate-200 shadow-sm">
+                                <div className={`w-2 h-2 rounded-full ${backendStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                <span className="text-[9px] font-bold text-slate-600">運算核心: {backendStatus === 'online' ? '已連線' : '斷線'}</span>
+                            </div>
+                        </div>
+
+                        {/* 身分切換 */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl mb-4 shadow-inner shrink-0">
+                            <button onClick={() => handleModeSwitch('teacher')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${appMode === 'teacher' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🏫 教師建檔 (寫入)</button>
+                            <button onClick={() => handleModeSwitch('student')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${appMode === 'student' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🎓 學生評量 (測驗)</button>
+                        </div>
+
+                        {/* 教室設定艙 */}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shrink-0">
+                            <h3 className="font-bold text-xs text-slate-700 mb-3 flex justify-between items-center">
+                                <span>🏫 虛擬教室與關卡設定</span>
+                            </h3>
+                            <div className="mb-1">
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1">當前測驗關卡 (題庫)</label>
+                                <div className="flex gap-2">
+                                    <select value={currentTask} onChange={(e) => setCurrentTask(e.target.value)} className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-indigo-500">
+                                        {taskList.length === 0 && <option value="" disabled>-- 目前無任何關卡 --</option>}
+                                        {taskList.map((task, i) => <option key={i} value={task}>{task}</option>)}
+                                    </select>
+                                    {appMode === 'teacher' && (
+                                        <button onClick={() => setIsAddingTask(!isAddingTask)} className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${isAddingTask ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+                                            {isAddingTask ? '取消' : '➕ 新增'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {appMode === 'teacher' && isAddingTask && (
+                                <div className="mt-2 flex gap-2 animate-fadeIn">
+                                    <input type="text" value={newTaskName} onChange={(e) => setNewTaskName(e.target.value)} placeholder="輸入新關卡名稱 (例: LED閃爍實作)" className="flex-1 bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500"/>
+                                    <button onClick={handleAddTask} className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-600">確定</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 題庫狀態 (老師) */}
+                        {appMode === 'teacher' && (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4 flex justify-between items-start shrink-0">
+                                <div className="w-full">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <h4 className="font-bold text-xs text-blue-800">📚 本關目前題庫數量</h4>
+                                        <button onClick={() => setShowClearConfirm(true)} disabled={templatePool.length === 0} className={`text-[10px] px-2 py-1 rounded font-bold transition shadow-sm ${templatePool.length === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-rose-500 text-white hover:bg-rose-600'}`}>
+                                            清空題庫
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-blue-600 mb-2">已收集 <span className="font-bold text-lg">{templatePool.length}</span> 種正確特徵</p>
+                                    
+                                    {templatePool.length > 0 && (
+                                        <details className="text-[10px] bg-white rounded border border-blue-100 p-2 cursor-pointer outline-none">
+                                            <summary className="font-bold text-blue-700 hover:text-blue-900 transition">👀 查看雲端範本內容</summary>
+                                            <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                                                {templatePool.map((seq, idx) => (
+                                                    <div key={idx} className="bg-slate-50 p-1 rounded font-mono text-slate-600 break-all">
+                                                        <span className="font-bold text-blue-500">[{idx+1}]</span> {JSON.stringify(seq)}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-4 flex-1 flex flex-col">
+                            {/* 學號輸入 (學生手動上傳時才顯示) */}
+                            {appMode === 'student' && classroomSubmissions.length === 0 && (
+                                <div className="p-3 border rounded-xl bg-emerald-50 border-emerald-200 animate-fadeIn shrink-0">
+                                    <label className="block text-xs font-bold text-emerald-800 mb-1">您的學號 (7碼)</label>
+                                    <input type="text" value={studentId} onChange={e => setStudentId(e.target.value)} placeholder="例: 1410115" maxLength="7" className="w-full bg-white border border-emerald-300 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
+                                    {studentId.length === 7 && parseStudentId(studentId) ? (
+                                        <p className="text-[10px] text-emerald-600 mt-1 font-bold">✅ 系統辨識為：{parseStudentId(studentId).className} 班 {parseStudentId(studentId).number} 號</p>
+                                    ) : studentId.length > 0 ? (
+                                        <p className="text-[10px] text-rose-500 mt-1">請輸入正確的7碼數字格式</p>
+                                    ) : null}
+                                </div>
+                            )}
+
+                            {/* 影片上傳區塊 */}
+                            <div className={`p-4 rounded-xl border-2 transition-colors relative flex flex-col shrink-0 ${appMode === 'student' && templatePool.length === 0 ? 'border-rose-200 bg-rose-50/50 opacity-50 pointer-events-none' : 'border-slate-200 bg-white'}`}>
+                                <span className="block text-xs font-bold text-slate-500 mb-3">影像樣本來源</span>
+                                
+                                {appMode === 'teacher' ? (
+                                    <label className="relative border-2 border-dashed border-slate-300 rounded-xl hover:border-indigo-400 hover:bg-slate-50 transition-colors p-4 cursor-pointer flex flex-col items-center justify-center">
+                                        <input type="file" ref={fileInputRef} onChange={handleManualUpload} accept="video/*" disabled={status === 'analyzing' || status === 'queued'} className="hidden"/>
+                                        <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+                                        <span className="text-[11px] font-bold text-slate-600 text-center truncate px-2 w-full">{videoFile ? videoFile.name : '點擊選擇檔案 (秒開)'}</span>
+                                    </label>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        <button onClick={loadGasCourses} disabled={status === 'analyzing'} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold py-3 rounded-xl border border-emerald-300 transition flex items-center justify-center gap-2 shadow-sm text-sm active:scale-95 disabled:opacity-50">
+                                            <i className="fa-solid fa-chalkboard-user"></i> 匯入 Classroom 影片名單
+                                        </button>
+                                        <div className="flex items-center justify-between">
+                                            <hr className="w-full border-slate-200"/><span className="text-[10px] text-slate-400 font-bold px-2">或</span><hr className="w-full border-slate-200"/>
+                                        </div>
+                                        <label className="w-full bg-white hover:bg-slate-50 text-slate-600 font-bold py-2 rounded-xl border-2 border-dashed border-slate-300 transition flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer">
+                                            <i className="fa-solid fa-folder-open"></i> {videoFile && classroomSubmissions.length === 0 ? videoFile.name : '手動選擇本機檔案'}
+                                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleManualUpload} accept="video/*" disabled={status === 'analyzing' || status === 'queued'}/>
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 🌟 Classroom 待批改名單 (學生模式特有) */}
+                            {appMode === 'student' && classroomSubmissions.length > 0 && (
+                                <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col flex-1 min-h-[150px] animate-fadeIn">
+                                    <div className="flex justify-between items-center mb-2 shrink-0">
+                                        <span className="text-xs font-bold text-emerald-800 bg-emerald-200/50 px-2 py-1 rounded-md">📋 待批改名單 ({classroomSubmissions.length})</span>
+                                        <label className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 cursor-pointer">
+                                            <input type="checkbox" checked={writeBackScore} onChange={e => setWriteBackScore(e.target.checked)} className="accent-emerald-600 w-3 h-3"/>
+                                            同步成績至 Classroom
+                                        </label>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar pr-1 bg-white p-2 rounded-lg border border-emerald-100 shadow-inner">
+                                        {classroomSubmissions.map((sub, idx) => {
+                                            const isSelected = currentSubmissionIndex === idx;
+                                            return (
+                                                <button 
+                                                    key={sub.id}
+                                                    onClick={() => loadStudentVideo(sub, idx)}
+                                                    className={`w-full text-left p-2 rounded-lg border text-xs font-bold truncate transition flex items-center justify-between ${isSelected ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                                                >
+                                                    <span className="truncate pr-2">
+                                                        {isSelected && <i className="fa-solid fa-play-circle mr-1.5 animate-pulse text-yellow-300"></i>}
+                                                        {sub.name}
+                                                    </span>
+                                                    {sub.score !== undefined && (
+                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] ${isSelected ? 'bg-white text-emerald-600' : 'bg-emerald-100 text-emerald-700'}`}>{sub.score}分</span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 引擎與規則設定 */}
+                            <div className={`p-4 rounded-xl border relative shrink-0 ${appMode === 'teacher' ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-200 opacity-90'}`}>
+                                {appMode === 'student' && <div className="absolute inset-0 z-10 cursor-not-allowed" title="鎖定為雲端設定"></div>}
+                                
+                                <div className="mb-3 flex justify-between items-end">
+                                    <div className="w-full">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">本關卡分析引擎</label>
+                                        <div className="flex gap-2 w-full">
+                                            <button onClick={() => { setAnalysisEngine('state'); setStrictMode(true); setResultHistory([]); }} className={`flex-1 px-1 py-1.5 text-[11px] font-bold rounded transition-colors ${analysisEngine === 'state' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>狀態面積</button>
+                                            <button onClick={() => { setAnalysisEngine('ocr'); setStrictMode(true); setResultHistory([]); }} className={`flex-1 px-1 py-1.5 text-[11px] font-bold rounded transition-colors ${analysisEngine === 'ocr' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>文字辨識</button>
+                                            <button onClick={() => { setAnalysisEngine('color'); setStrictMode(true); setResultHistory([]); }} className={`flex-1 px-1 py-1.5 text-[11px] font-bold rounded transition-colors ${analysisEngine === 'color' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>顏色</button>
+                                            <button onClick={() => { setAnalysisEngine('motion'); setStrictMode(true); setResultHistory([]); }} className={`flex-1 px-1 py-1.5 text-[11px] font-bold rounded transition-colors ${analysisEngine === 'motion' ? 'bg-indigo-500 text-white shadow' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>動態轉動</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {analysisEngine === 'state' && (
+                                    <div className="mb-3">
+                                        <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1"><span>圖形變化靈敏度</span><span>{stateSensitivity}%</span></div>
+                                        <input type="range" min="0.5" max="15" step="0.5" value={stateSensitivity} onChange={e => setStateSensitivity(parseFloat(e.target.value))} className="w-full accent-indigo-500"/>
+                                    </div>
+                                )}
+                                
+                                {analysisEngine === 'motion' && (
+                                    <div className="mb-3">
+                                        <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1"><span>轉動觸發靈敏度</span><span>{stateSensitivity}%</span></div>
+                                        <input type="range" min="0.5" max="15" step="0.5" value={stateSensitivity} onChange={e => setStateSensitivity(parseFloat(e.target.value))} className="w-full accent-indigo-500"/>
+                                        <p className="text-[10px] text-indigo-500 mt-1.5 leading-tight font-medium bg-indigo-50 p-1.5 rounded border border-indigo-100">
+                                            💡 馬達神技：若馬達原地轉動難以辨識，請在轉軸上【貼一小塊亮色膠帶或白紙】，並將綠框緊緊包住它！
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                <div className="pt-2 border-t border-slate-200 flex flex-col gap-1.5 mt-1">
+                                    <label className="flex items-center text-xs font-bold text-slate-700 cursor-pointer">
+                                        <input type="checkbox" checked={strictMode} onChange={e => setStrictMode(e.target.checked)} className="mr-2 accent-indigo-500"/>
+                                        開啟嚴格特徵比對 (必開)
+                                    </label>
+                                    {analysisEngine !== 'motion' && (
+                                        <label className="flex items-center text-[11px] font-bold text-slate-700 cursor-pointer">
+                                            <input type="checkbox" checked={config.invertColor} onChange={e => setConfig({...config, invertColor: e.target.checked})} className="mr-2 accent-indigo-500"/>
+                                            黑白反轉 <span className="text-[10px] text-slate-400 font-normal ml-1">(實體燈條取消；模擬器請勾選)</span>
+                                        </label>
+                                    )}
+                                </div>
+
+                                {appMode === 'teacher' && currentTask && (
+                                    <button onClick={saveSettingsOnly} className="mt-3 w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded border border-indigo-200 transition flex items-center justify-center gap-1 shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        僅儲存目前設定至雲端 (免重新分析)
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {errorMessage && <div className="mt-2 mb-2 p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-lg font-medium whitespace-pre-wrap shrink-0">🚨 {errorMessage}</div>}
+
+                        {/* 底部按鈕 */}
+                        <div className="mt-auto pt-4 border-t border-slate-100 shrink-0">
+                            {status === 'queued' && (
+                                <div className="mb-3 animate-fadeIn">
+                                    <div className="flex justify-between text-[11px] font-bold text-amber-600 mb-1"><span>{queueMsg}</span></div>
+                                    <div className="w-full bg-amber-100 rounded-full h-2 overflow-hidden"><div className="bg-amber-400 h-full w-full rounded-full animate-pulse"></div></div>
+                                </div>
+                            )}
+                            {status === 'analyzing' && (
+                                <div className="mb-3 animate-fadeIn">
+                                    <div className="flex justify-between text-[11px] font-bold text-slate-500 mb-1"><span>分析進度</span><span>{progressInfo.percent}%</span></div>
+                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div className={`h-full rounded-full transition-all duration-300 ${appMode === 'teacher' ? 'bg-blue-500' : 'bg-emerald-500'}`} style={{width: `${progressInfo.percent}%`}}></div></div>
+                                </div>
+                            )}
+                            
+                            <button 
+                                onClick={status === 'success' ? handleResetUI : (status === 'analyzing' || status === 'queued') ? () => abortControllerRef.current && abortControllerRef.current.abort() : startAnalysis} 
+                                disabled={status !== 'success' && (!previewUrl || !currentTask || (appMode === 'student' && templatePool.length === 0) || backendStatus !== 'online')}
+                                className={`w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${
+                                    status === 'success' ? 'bg-slate-600 text-white hover:bg-slate-700 shadow-md' :
+                                    (!previewUrl || !currentTask || (appMode === 'student' && templatePool.length === 0) || backendStatus !== 'online') ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 
+                                    status === 'connecting' ? 'bg-slate-400 text-white cursor-wait' : 
+                                    status === 'queued' ? 'bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200' :
+                                    status === 'analyzing' ? 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100' :
+                                    appMode === 'teacher' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                }`}
+                            >
+                                {status === 'success' ? (currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? '⏭️ 自動進行下一位學生' : '🔄 重置畫面，進行下一筆') :
+                                 status === 'connecting' ? '建立通道中...' : 
+                                 status === 'queued' ? '🛑 取消排隊' :
+                                 status === 'analyzing' ? '🛑 強制中斷' : 
+                                 backendStatus !== 'online' ? '⚠️ 等待伺服器連線' :
+                                 appMode === 'teacher' ? (templatePool.length > 0 ? `➕ 加入至題庫` : `🚀 初始化訓練`) : '啟動 AI 多重比對'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* --- 中欄：影片與 ROI 區 --- */}
+                    <div className="bg-slate-900 rounded-2xl shadow-lg flex flex-col w-full lg:w-[40%] h-[42vh] lg:h-full overflow-hidden shrink-0 relative">
+                        {!previewUrl ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6Z"/></svg>
+                                <p className="text-xs font-medium">請載入測試影片</p>
+                            </div>
+                        ) : (
+                            <div className="relative w-full h-full flex items-center justify-center p-2">
+                                <div className="relative flex items-center justify-center max-w-full max-h-full inline-flex leading-none shadow-2xl">
+                                    <video ref={videoRef} src={previewUrl} controls className="max-w-full max-h-[38vh] lg:max-h-full object-contain" onLoadedMetadata={updateVideoDimensions}></video>
+                                    {videoInfo.width > 1 && (
+                                        <div className="absolute inset-0 pointer-events-none select-none">
+                                            <div 
+                                                className={`absolute border-2 transition-all ${appMode === 'teacher' ? 'border-blue-500 bg-blue-500/10 pointer-events-auto' : 'border-emerald-500 bg-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.6)] pointer-events-none'} ${isDragging && dragType === 'move' ? 'cursor-grabbing' : 'cursor-grab'} ${(status === 'analyzing' || status === 'queued') ? 'opacity-30 pointer-events-none' : ''}`}
+                                                style={{ left: `${(roi.x / videoInfo.width) * 100}%`, top: `${(roi.y / videoInfo.height) * 100}%`, width: `${(roi.w / videoInfo.width) * 100}%`, height: `${(roi.h / videoInfo.height) * 100}%` }}
+                                                onMouseDown={(e) => handleMouseDown(e, 'move')}
+                                            >
+                                                {appMode === 'teacher' && (
+                                                    <div className="absolute -right-1.5 -bottom-1.5 w-4 h-4 rounded-full bg-blue-600 cursor-se-resize shadow border border-white hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize')}></div>
+                                                )}
+                                                {appMode === 'student' && (
+                                                    <div className="absolute top-1 left-2 text-white text-[9px] font-mono bg-emerald-600/80 px-1 rounded font-bold shadow-sm">雲端鎖定範圍</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- 右欄：多狀態動態解碼時間軸與結算 --- */}
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-5 flex flex-col w-full lg:w-[28%] h-[38vh] lg:h-full overflow-y-auto shrink-0 relative bg-slate-50/50">
+                        <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 sticky top-0 bg-slate-50/90 backdrop-blur z-20 flex justify-between items-center">
+                            <span>{appMode === 'teacher' ? '🔍 訓練資料萃取' : '🏁 動態共識決算'}</span>
+                        </h3>
+                        
+                        <div className="flex-1 overflow-y-auto space-y-3 relative pl-1 pr-1 custom-scrollbar">
+                            
+                            {/* 🌟 學生模式：多重範本最高分結算 UI */}
+                            {appMode === 'student' && status === 'success' && bestMatchResult && (
+                                <div className="mb-6 p-5 rounded-2xl border bg-white shadow-md score-pop relative overflow-hidden flex flex-col items-center">
+                                    <div className={`absolute top-0 left-0 w-1 h-full ${bestMatchResult.score >= 80 ? 'bg-emerald-500' : bestMatchResult.score >= 60 ? 'bg-blue-500' : 'bg-rose-500'}`}></div>
+                                    <div className="text-[10px] font-bold text-slate-400 text-center mb-1 uppercase tracking-wider">經過與 {templatePool.length} 組範本比對</div>
+                                    <h4 className="font-bold text-center text-slate-700 text-sm mb-3">【{currentTask}】最佳擬合得分</h4>
+                                    
+                                    <div className="flex justify-center items-end gap-1 mb-4">
+                                        <span className={`text-6xl font-black tracking-tighter ${bestMatchResult.score >= 80 ? 'text-emerald-500' : bestMatchResult.score >= 60 ? 'text-blue-500' : 'text-rose-500'}`}>{bestMatchResult.score}</span>
+                                        <span className="text-slate-400 font-bold text-lg mb-1">分</span>
+                                    </div>
+                                    
+                                    <div className="text-xs space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-100 w-full mb-4">
+                                        <div className="flex justify-between items-center border-b border-slate-200 pb-1.5 mb-1.5"><span className="text-slate-500 font-bold">🏆 最佳擬合路徑</span><span className="font-bold text-blue-600 bg-blue-100 px-1.5 rounded">第 {bestMatchResult.templateIndex} 號範本</span></div>
+                                        <div className="flex justify-between items-center"><span className="text-slate-500">✅ 成功符合動作</span><span className="font-bold text-emerald-600">{bestMatchResult.matched} / {bestMatchResult.totalSteps}</span></div>
+                                        <div className="flex justify-between items-center"><span className="text-slate-500">⚠️ 錯誤多餘動作</span><span className={`font-bold ${bestMatchResult.extra > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{bestMatchResult.extra} 次 <span className="text-[10px] font-normal">(扣 {bestMatchResult.extra * 10} 分)</span></span></div>
+                                    </div>
+
+                                    <button onClick={handleResetUI} className={`w-full text-xs font-bold transition-colors px-4 py-2.5 rounded-lg shadow-sm border ${currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-700' : 'bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 border-slate-200'}`}>
+                                        {currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? '批改下一位學生 ⏭️' : '完成檢核並重置畫面'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {resultHistory.length === 0 && status !== 'analyzing' && status !== 'success' && status !== 'queued' && (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-300 py-12">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/><path d="m16 12 5 3-5 3v-6Z"/></svg>
+                                    <p className="text-xs mt-2">分析事件將顯示於此</p>
+                                </div>
+                            )}
+                            
+                            {resultHistory.map((item, idx) => (
+                                <div key={idx} className="relative flex items-start gap-3 group animate-fadeIn">
+                                    {idx !== resultHistory.length - 1 && <div className="absolute left-[11px] top-8 bottom-[-12px] w-[2px] bg-slate-200"></div>}
+                                    <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-mono font-bold z-10 shrink-0 shadow-sm mt-1">{idx + 1}</div>
+                                    <div className={`flex-1 p-3 border rounded-xl shadow-sm bg-white transition-all ${item.rule_tag ? item.rule_color : 'border-slate-200'}`}>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold">⏱️ {item.time}s</span>
+                                            {item.rule_tag && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-white/80 shadow-2xs">{item.rule_tag}</span>}
+                                        </div>
+                                        <div className="bg-white/60 border border-white/50 rounded-lg p-2 mt-1 shadow-inner">
+                                            <div className="text-[10px] text-slate-400 font-bold mb-0.5">系統實際偵測：</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="line-through text-slate-400 text-[11px] font-mono">{item.old_value}</span>
+                                                <span className="text-slate-300 text-xs">➡️</span>
+                                                <span className="text-sm font-bold text-slate-700 font-mono break-all">{item.new_value}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 🌟 老師專用：清空題庫確認 Modal 彈窗 */}
+                    {showClearConfirm && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fadeIn">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+                                <div className="mx-auto w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center text-rose-500 mb-4"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></div>
+                                <h3 className="font-bold text-lg text-slate-800 mb-2">確認清空題庫？</h3>
+                                <p className="text-sm text-slate-500 mb-6">您即將清空「<span className="font-bold text-rose-500">{currentTask}</span>」的所有訓練範本，此操作無法復原。</p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-2 rounded-lg font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">取消</button>
+                                    <button onClick={clearTemplatePool} className="flex-1 py-2 rounded-lg font-bold bg-rose-500 text-white hover:bg-rose-600 transition shadow-sm">確定清空</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
