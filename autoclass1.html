@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom 作業與班級管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .spinner { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+    <!-- 🟢 共用浮動視窗區 -->
+    <!-- 自訂訊息彈窗 -->
+    <div id="customModal" class="fixed inset-0 bg-black/60 hidden z-[100] flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90vw] overflow-hidden flex flex-col transform transition-all scale-95" id="customModalContent">
+            <div class="p-6 text-center">
+                <div id="customModalIcon" class="text-5xl mb-4"></div>
+                <h3 id="customModalTitle" class="text-xl font-black text-gray-800 mb-2">提示</h3>
+                <p id="customModalMessage" class="text-gray-600 text-lg font-bold whitespace-pre-wrap leading-relaxed"></p>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t" id="customModalActions"></div>
+        </div>
+    </div>
+
+    <!-- GAS 課程/作業瀏覽彈窗 -->
+    <div id="gasFileModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-[600px] max-w-full overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center bg-green-600 p-4">
+                <h3 class="font-bold text-lg text-white" id="gasModalTitle"><i class="fa-solid fa-chalkboard-user mr-2"></i>瀏覽 Classroom 作業</h3>
+                <button onclick="closeGasFileModal()" class="text-green-100 hover:text-white transition"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div class="p-3 bg-green-50 text-sm border-b border-green-200 flex flex-col gap-2 relative">
+                <div class="flex items-center text-green-800 font-bold overflow-x-auto whitespace-nowrap custom-scrollbar pb-1" id="gasBreadcrumbs">
+                    <button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button>
+                </div>
+                <button onclick="authorizeGas()" class="absolute right-3 top-3 text-xs bg-white text-green-700 border border-green-300 px-3 py-1.5 rounded font-bold hover:bg-green-100 transition shadow-sm">
+                    <i class="fa-solid fa-key"></i> 首次使用請先授權
+                </button>
+            </div>
+            <div id="gasLoading" class="hidden justify-center items-center py-8 text-green-600">
+                <div class="spinner !border-l-green-600 mr-2"></div><span class="font-bold" id="gasLoadingText">正在連線至 Classroom...</span>
+            </div>
+            <div id="gasFileList" class="p-4 overflow-y-auto custom-scrollbar flex-grow space-y-2 min-h-[300px]"></div>
+        </div>
+    </div>
+
+    <!-- 🟢 作業繳交即時看板 -->
+    <div id="boardModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[40] flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="relative bg-gray-100 rounded-xl shadow-2xl w-[98vw] max-w-[1400px] h-[90vh] overflow-hidden flex flex-col">
+            
+            <div id="boardActionLoading" class="hidden absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col justify-center items-center z-50">
+                <div class="spinner !w-16 !h-16 !border-[5px] !border-t-emerald-600 mb-6"></div>
+                <span class="font-black text-emerald-800 text-2xl tracking-wide text-center whitespace-pre-wrap leading-relaxed" id="boardActionLoadingText">準備打包中...</span>
+                <div id="downloadProgressBarContainer" class="w-2/3 max-w-md bg-emerald-100 rounded-full h-4 mt-6 hidden shadow-inner overflow-hidden border border-emerald-200">
+                    <div id="downloadProgressBar" class="bg-emerald-600 h-full rounded-full transition-all duration-300 ease-out relative" style="width: 0%"></div>
+                </div>
+                <div id="downloadProgressText" class="text-sm text-emerald-600 mt-2 font-black hidden">0%</div>
+            </div>
+
+            <div class="flex justify-between items-center bg-blue-700 p-3 shrink-0 shadow-md z-20">
+                <div class="flex items-center text-white">
+                    <div class="w-8 h-8 bg-white/20 rounded flex items-center justify-center text-lg mr-3"><i class="fa-solid fa-chart-line"></i></div>
+                    <div>
+                        <h3 class="font-black text-lg tracking-wide">作業繳交即時看板</h3>
+                        <p class="text-[11px] text-blue-200" id="boardSubtitle">請選擇要查看的課程與作業</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between lg:w-auto gap-3">
+                    <button id="manualRefreshBtn" onclick="manualRefreshBoard()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-full font-bold shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0">
+                        <i id="manualRefreshIcon" class="fa-solid fa-arrows-rotate"></i>手動更新
+                    </button>
+                    <button onclick="openDownloadModal()" class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-md transition-all active:scale-95 flex items-center gap-2">
+                        <i class="fa-solid fa-file-zipper"></i>一鍵打包附件
+                    </button>
+                    <button onclick="openBoardCourses()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-full font-bold shadow-md transition-all active:scale-95 flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-left"></i>重選課程
+                    </button>
+                    <button onclick="closeBoardModal()" class="text-blue-200 hover:text-white transition-colors px-2">
+                        <i class="fa-solid fa-times text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="boardLoading" class="hidden justify-center items-center py-20 text-blue-600 flex-grow bg-white">
+                <div class="flex flex-col items-center">
+                    <div class="spinner !w-12 !h-12 !border-[4px] !border-t-blue-600 mb-4"></div>
+                    <span class="font-bold text-lg">正在同步 Classroom 即時數據...</span>
+                </div>
+            </div>
+
+            <div id="boardContentArea" class="flex-grow flex flex-col overflow-hidden bg-gray-100 hidden">
+                <div class="bg-white flex flex-col shrink-0 shadow-sm z-10 border-b border-gray-200">
+                    <div class="p-2 md:p-3 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
+                        <label class="font-bold text-gray-700 text-sm whitespace-nowrap"><i class="fa-solid fa-filter mr-1 text-blue-500"></i>附件檢查：</label>
+                        <div class="flex-grow flex flex-wrap items-center gap-2">
+                            <input type="text" class="board-req-file w-[90px] sm:w-[105px] text-xs font-bold text-blue-600 bg-gray-50 border border-gray-300 rounded px-2 py-1.5 focus:border-blue-500 outline-none transition shadow-inner" value=".sb3" placeholder="規則1 (.sb3)" oninput="reRenderBoard()">
+                            <input type="text" class="board-req-file w-[90px] sm:w-[105px] text-xs font-bold text-blue-600 bg-gray-50 border border-gray-300 rounded px-2 py-1.5 focus:border-blue-500 outline-none transition shadow-inner" value="" placeholder="規則2 (.jpg)" oninput="reRenderBoard()">
+                            <input type="text" class="board-req-file w-[90px] sm:w-[105px] text-xs font-bold text-blue-600 bg-gray-50 border border-gray-300 rounded px-2 py-1.5 focus:border-blue-500 outline-none transition shadow-inner" value="" placeholder="規則3 (選填)" oninput="reRenderBoard()">
+                        </div>
+                    </div>
+                    <div class="p-2 md:p-3 bg-blue-50 flex items-center w-full">
+                        <div class="text-xs sm:text-sm text-gray-700 font-bold flex flex-wrap gap-4 sm:gap-8 w-full justify-start sm:justify-center px-2">
+                            <span class="flex items-center whitespace-nowrap"><i class="fa-solid fa-users mr-1 text-blue-500"></i>總計: <span id="stat-total" class="ml-1 text-blue-800 text-base font-black">0</span></span>
+                            <span class="flex items-center whitespace-nowrap"><i class="fa-solid fa-check-circle mr-1 text-green-500"></i>完成: <span id="stat-submitted" class="ml-1 text-green-600 text-base font-black">0</span></span>
+                            <span class="flex items-center whitespace-nowrap"><i class="fa-solid fa-triangle-exclamation mr-1 text-orange-500"></i>缺附件: <span id="stat-warning" class="ml-1 text-orange-600 text-base font-black">0</span></span>
+                            <span class="flex items-center whitespace-nowrap"><i class="fa-solid fa-xmark-circle mr-1 text-red-500"></i>未交: <span id="stat-missing" class="ml-1 text-red-600 text-base font-black">0</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 md:p-4 overflow-y-auto custom-scrollbar flex-grow bg-gray-100">
+                    <div id="boardGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-8 gap-3 sm:gap-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 打包下載設定彈窗 -->
+    <div id="downloadModal" class="fixed inset-0 bg-black/60 hidden z-[60] flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] h-[85vh] flex flex-col overflow-hidden">
+            <div class="bg-slate-700 p-4 shrink-0 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-file-zipper"></i>打包下載設定</h3>
+                <button onclick="document.getElementById('downloadModal').classList.add('hidden')" class="text-slate-300 hover:text-white transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <div class="p-5 border-b bg-slate-50 flex flex-col gap-4 shrink-0 shadow-inner">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-1"><i class="fa-solid fa-filter text-emerald-500"></i> 1. 檔案過濾條件</label>
+                    <input type="text" id="dlFilterInput" oninput="renderDownloadStudentList()" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm focus:border-emerald-500 outline-none shadow-sm" placeholder="例如: .sb3, .mp4 或 運算思維">
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <label class="text-sm font-bold text-slate-700 flex items-center gap-1"><i class="fa-solid fa-users text-emerald-500"></i> 2. 選擇要打包的學生</label>
+                    <div class="flex gap-2">
+                        <button onclick="toggleDlSelectAll(true)" class="text-xs bg-slate-200 text-slate-700 px-3 py-1.5 rounded hover:bg-slate-300 transition">全選</button>
+                        <button onclick="toggleDlSelectAll(false)" class="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded hover:bg-slate-200 border border-slate-200 transition">全部取消</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-grow overflow-y-auto p-4 custom-scrollbar bg-white" id="dlStudentList"></div>
+            <div class="p-4 border-t bg-slate-50 flex justify-end gap-3 shrink-0">
+                <button onclick="document.getElementById('downloadModal').classList.add('hidden')" class="px-6 py-2.5 bg-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-300 transition">取消</button>
+                <button onclick="executeDownload()" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-500 transition flex items-center gap-2">
+                    <i class="fa-solid fa-download"></i>開始打包 ZIP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 學生作品展示牆彈窗 -->
+    <div id="wallModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-100 rounded-xl shadow-2xl w-[98vw] max-w-[1400px] h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex justify-between items-center bg-purple-700 p-3 shrink-0 shadow-md z-20">
+                <div class="flex items-center text-white">
+                    <div class="w-8 h-8 bg-white/20 rounded flex items-center justify-center text-lg mr-3"><i class="fa-solid fa-images"></i></div>
+                    <div>
+                        <h3 class="font-black text-lg tracking-wide">學生作品展示牆</h3>
+                        <p class="text-[11px] text-purple-200" id="wallSubtitle">選擇課程與作業，即時投影展示</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between lg:w-auto gap-3">
+                    <button onclick="openWallCourses()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-full font-bold shadow-md transition flex items-center gap-2"><i class="fa-solid fa-arrow-left"></i>重選課程</button>
+                    <button onclick="closeWallModal()" class="text-purple-200 hover:text-white transition-colors px-2"><i class="fa-solid fa-times text-2xl"></i></button>
+                </div>
+            </div>
+            
+            <div id="wallLoading" class="hidden justify-center items-center py-20 text-purple-600 flex-grow bg-white">
+                <div class="flex flex-col items-center">
+                    <div class="spinner !border-t-purple-600 !w-12 !h-12 !border-[4px] mb-4"></div>
+                    <span class="font-bold text-lg">正在同步全班附件與縮圖中...</span>
+                </div>
+            </div>
+
+            <div id="wallContentArea" class="flex-grow flex flex-col overflow-hidden bg-gray-100 hidden">
+                <div class="bg-white p-3 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between shrink-0 shadow-sm gap-2">
+                    <div class="flex items-center gap-3 w-full max-w-xl">
+                        <label class="font-bold text-gray-700 text-sm whitespace-nowrap"><i class="fa-solid fa-filter mr-1 text-purple-600"></i>展示篩選：</label>
+                        <input type="text" id="wallFilterInput" placeholder="過濾展示 (例如: .png, 流程圖)" class="w-full text-xs font-bold text-purple-700 bg-gray-50 border border-gray-300 rounded px-2 py-1.5 focus:border-purple-500 outline-none transition shadow-inner" oninput="reRenderWall()">
+                    </div>
+                    <div class="text-xs text-gray-400 font-medium bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
+                        <i class="fa-solid fa-images text-purple-500 mr-1"></i>共展示 <span id="wallCountText" class="font-bold text-purple-700">0</span> 份作品
+                    </div>
+                </div>
+                <div class="p-4 overflow-y-auto custom-scrollbar flex-grow bg-gray-50">
+                    <div id="wallGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 建立新作業彈窗 -->
+    <div id="createAssignmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-[500px] max-w-[95vw] overflow-hidden flex flex-col">
+            <div class="flex justify-between items-center bg-green-600 p-4">
+                <h3 class="font-bold text-lg text-white"><i class="fa-solid fa-bullhorn mr-2"></i>發佈新作業至 Classroom</h3>
+                <button onclick="closeCreateAssignmentModal()" class="text-green-100 hover:text-white transition"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div id="createAssignLoading" class="hidden justify-center items-center py-10 text-green-600">
+                <div class="spinner !border-l-green-600 mr-2"></div><span class="font-bold">讀取課程中...</span>
+            </div>
+            <div id="createAssignForm" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">1. 選擇發佈課程 <span class="text-red-500">*</span></label>
+                    <select id="newAssignCourse" class="w-full border rounded-lg p-2 focus:ring-green-500"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">2. 作業名稱 <span class="text-red-500">*</span></label>
+                    <input type="text" id="newAssignTitle" class="w-full border rounded-lg p-2 focus:ring-green-500" placeholder="例如：Scratch 迷宮遊戲作業">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">3. 作業說明 (選填)</label>
+                    <textarea id="newAssignDesc" rows="3" class="w-full border rounded-lg p-2 focus:ring-green-500 custom-scrollbar" placeholder="請同學上傳完成的檔案..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">4. 滿分設定</label>
+                    <input type="number" id="newAssignPoints" value="100" class="w-32 border rounded-lg p-2 font-bold text-blue-600 focus:ring-green-500">
+                </div>
+                <div class="pt-4 border-t flex justify-end gap-2 mt-4">
+                    <button onclick="closeCreateAssignmentModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">取消</button>
+                    <button id="createAssignBtn" onclick="submitCreateAssignment()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition"><i class="fa-solid fa-paper-plane mr-2"></i>發佈作業</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 🟢 系統主畫面                               -->
+    <!-- ========================================== -->
+    <div class="max-w-7xl mx-auto mt-2">
+        <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
+                <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
+            </h1>
+        </div>
+
+        <!-- 🌟 跨檔案相對路徑導覽選單 🌟 -->
+        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto custom-scrollbar border-b border-gray-700">
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
+                <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass4.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-video text-lg"></i> 4. 5016B 模擬影片評分系統
+            </a>
+        </div>
+
+        <div class="bg-white shadow-lg rounded-b-xl overflow-hidden min-h-[600px] flex flex-col">
+            
+            <div id="main-tab-content-classroom" class="p-6 md:p-8 flex-grow block bg-gray-50">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 border-l-4 border-blue-500 pl-3">Classroom 作業與班級管理</h2>
+                    <p class="text-gray-600 ml-4">集中管理您的 Google Classroom，在此發佈的作業能完美支援「自動寫回成績」功能。</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="border border-green-200 rounded-xl p-6 bg-white shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-1 transition duration-300">
+                        <div>
+                            <div class="w-14 h-14 bg-green-100 text-green-600 rounded-xl flex items-center justify-center text-2xl mb-4 border border-green-200">
+                                <i class="fa-solid fa-plus"></i>
+                            </div>
+                            <h4 class="font-bold text-gray-800 text-xl mb-2">發佈作業至 Classroom</h4>
+                            <p class="text-sm text-gray-500 mb-4 leading-relaxed">由此系統派發作業給學生，未來即可使用 Scratch 模組的「一鍵批改」寫回成績。</p>
+                        </div>
+                        <button onclick="openCreateAssignmentModal()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 mt-4">
+                            <i class="fa-solid fa-plus"></i> 建立新作業
+                        </button>
+                    </div>
+                    
+                    <div class="border border-blue-200 rounded-xl p-6 bg-white shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-1 transition duration-300">
+                        <div>
+                            <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-2xl mb-4 border border-blue-200">
+                                <i class="fa-solid fa-chart-line"></i>
+                            </div>
+                            <h4 class="font-bold text-gray-800 text-xl mb-2">作業繳交即時看板</h4>
+                            <p class="text-sm text-gray-500 mb-4 leading-relaxed">視覺化顯示全班繳交狀態，可自訂檢查多種附檔名，並支援「一鍵打包附件下載」。</p>
+                        </div>
+                        <button onclick="openBoardCourses()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 mt-4">
+                            <i class="fa-solid fa-users-viewfinder"></i> 開啟即時看板
+                        </button>
+                    </div>
+
+                    <div class="border border-purple-200 rounded-xl p-6 bg-white shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-1 transition duration-300">
+                        <div>
+                            <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center text-2xl mb-4 border border-purple-200">
+                                <i class="fa-solid fa-images"></i>
+                            </div>
+                            <h4 class="font-bold text-gray-800 text-xl mb-2">學生作品展示牆</h4>
+                            <p class="text-sm text-gray-500 mb-4 leading-relaxed">以精美大卡片形式投影展示學生上傳的照片、流程圖或附件。適合課堂報告與互評。</p>
+                        </div>
+                        <button onclick="openWallCourses()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 mt-4">
+                            <i class="fa-solid fa-photo-film"></i> 開啟作品展示牆
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 JavaScript 邏輯區                       -->
+    <!-- ========================================== -->
+    <script>
+        const GAS_URL = "https://script.google.com/a/macros/mail.qfm.kh.edu.tw/s/AKfycbydRpN2hbYelUy9sAvTYh26JlK_DBpA5NrAN-jmepXRjG4oBnGy4TTT2NWktLK4JdzSyA/exec";
+        
+        let gasCurrentCourseId = null;
+        let gasCurrentCourseWorkId = null;
+        let gasModalCaller = null; 
+        let currentBoardData = [];
+        let jsonpCounter = 0;
+
+        function escapeHTML(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[&<>'"]/g, function(match) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match];
+            });
+        }
+
+        function generateDateVariations(str) {
+            const dateRegex = /^(\d{4})[-_.]?(\d{1,2})[-_.]?(\d{1,2})$/;
+            const match = str.match(dateRegex);
+            if (match) {
+                const y = match[1], m = match[2], d = match[3];
+                const padM = m.padStart(2, '0'), padD = d.padStart(2, '0');
+                const noPadM = parseInt(m, 10).toString(), noPadD = parseInt(d, 10).toString();
+                return [...new Set([
+                    `${y}${padM}${padD}`, `${y}-${padM}-${padD}`, `${y}_${padM}_${padD}`, `${y}.${padM}.${padD}`,
+                    `${y}-${noPadM}-${noPadD}`, `${y}_${noPadM}_${noPadD}`, `${y}.${noPadM}.${noPadD}`
+                ])];
+            }
+            return [str];
+        }
+
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + Date.now() + '_' + (jsonpCounter++);
+                const script = document.createElement('script');
+                const timeoutId = setTimeout(() => { cleanup(); reject(new Error("請求超時！請確認已連線至 GAS。")); }, 30000);
+                function cleanup() { delete window[callbackName]; if (script.parentNode) document.body.removeChild(script); }
+                window[callbackName] = function(data) { clearTimeout(timeoutId); cleanup(); resolve(data); };
+                const sep = url.includes('?') ? '&' : '?';
+                script.src = `${url}${sep}callback=${callbackName}`;
+                script.onerror = function() { clearTimeout(timeoutId); cleanup(); reject(new Error("無法連線至 GAS。")); };
+                document.body.appendChild(script);
+            });
+        }
+
+        function customAlert(message, type = 'info') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('customModal');
+                const icon = document.getElementById('customModalIcon');
+                const title = document.getElementById('customModalTitle');
+                const msg = document.getElementById('customModalMessage');
+                const actions = document.getElementById('customModalActions');
+
+                if (type === 'error') {
+                    icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>';
+                    title.innerText = '發生錯誤';
+                } else if (type === 'success') {
+                    icon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+                    title.innerText = '成功';
+                } else {
+                    icon.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+                    title.innerText = '系統提示';
+                }
+                msg.innerText = message;
+                actions.innerHTML = `<button id="customAlertBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition">確定</button>`;
+                modal.classList.remove('hidden');
+                document.getElementById('customAlertBtn').onclick = () => { modal.classList.add('hidden'); resolve(true); };
+            });
+        }
+
+        function customConfirm(message) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('customModal');
+                const icon = document.getElementById('customModalIcon');
+                const title = document.getElementById('customModalTitle');
+                const msg = document.getElementById('customModalMessage');
+                const actions = document.getElementById('customModalActions');
+
+                icon.innerHTML = '<i class="fa-solid fa-circle-question text-indigo-500"></i>';
+                title.innerText = '請確認操作';
+                msg.innerText = message;
+                actions.innerHTML = `
+                    <button id="customConfirmCancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded-lg transition">取消</button>
+                    <button id="customConfirmOk" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition shadow-md">確定執行</button>
+                `;
+                modal.classList.remove('hidden');
+                document.getElementById('customConfirmCancel').onclick = () => { modal.classList.add('hidden'); resolve(false); };
+                document.getElementById('customConfirmOk').onclick = () => { modal.classList.add('hidden'); resolve(true); };
+            });
+        }
+
+        function closeGasFileModal() { document.getElementById('gasFileModal').classList.add('hidden'); }
+        function authorizeGas() { window.open(`${GAS_URL}?action=auth`, '_blank'); }
+        function showGasLoading(text) { document.getElementById('gasLoading').classList.replace('hidden', 'flex'); document.getElementById('gasFileList').innerHTML = ''; document.getElementById('gasLoadingText').innerText = text; }
+        function hideGasLoading() { document.getElementById('gasLoading').classList.replace('flex', 'hidden'); }
+        function updateGasBreadcrumb(html) { document.getElementById('gasBreadcrumbs').innerHTML = `<button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button> ${html}`; }
+
+        async function loadGasCourses(caller) {
+            if(caller) gasModalCaller = caller; 
+            document.getElementById('gasFileModal').classList.remove('hidden');
+            showGasLoading("正在讀取 Classroom 課程清單...");
+            updateGasBreadcrumb("");
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.courses.forEach(c => {
+                    html += `<button onclick="loadGasAssignments('${c.id}', '${escapeHTML(c.name)}')" class="w-full text-left p-4 border rounded-lg hover:bg-green-50 hover:border-green-400 transition flex items-center group bg-white shadow-sm mb-2"><div class="bg-green-100 text-green-700 p-3 rounded-lg mr-4"><i class="fa-solid fa-chalkboard text-xl"></i></div><div class="font-bold text-gray-800 text-lg truncate">${escapeHTML(c.name)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">讀取失敗，請確認已授權。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        async function loadGasAssignments(courseId, courseName) {
+            showGasLoading(`正在讀取「${courseName}」的作業清單...`);
+            updateGasBreadcrumb(`<span class="mx-2 text-gray-400">/</span> <span class="text-green-700 truncate max-w-[150px]">${courseName}</span>`);
+            gasCurrentCourseId = courseId;
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${courseId}`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.assignments.forEach(a => {
+                    html += `<button onclick="handleGasAssignmentSelect('${courseId}', '${a.id}', '${escapeHTML(a.title)}')" class="w-full text-left p-3 border rounded-lg hover:bg-blue-50 transition flex items-center group bg-white shadow-sm mb-2"><div class="bg-blue-100 text-blue-700 p-2 rounded mr-3"><i class="fa-solid fa-clipboard-list text-lg"></i></div><div class="font-bold text-gray-700 truncate">${escapeHTML(a.title)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">作業清單讀取失敗。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        function handleGasAssignmentSelect(courseId, assignId, assignName) {
+            if (gasModalCaller === 'board') fetchBoardData(courseId, assignId, assignName);
+            else if (gasModalCaller === 'wall') fetchWallData(courseId, assignId, assignName);
+        }
+
+        // --- 看板與數據渲染 ---
+        function openBoardCourses() { closeBoardModal(); loadGasCourses('board'); }
+        function closeBoardModal() { document.getElementById('boardModal').classList.add('hidden'); }
+
+        async function fetchBoardData(courseId, assignId, assignName) {
+            closeGasFileModal();
+            document.getElementById('boardModal').classList.remove('hidden');
+            document.getElementById('boardLoading').classList.remove('hidden');
+            document.getElementById('boardContentArea').classList.add('hidden');
+            document.getElementById('boardSubtitle').innerText = assignName;
+            gasCurrentCourseId = courseId;
+            gasCurrentCourseWorkId = assignId;
+
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getBoardData&courseId=${courseId}&courseWorkId=${assignId}`);
+                if (data.status === 'error') throw new Error(data.message);
+                currentBoardData = data.data || [];
+                reRenderBoard();
+                document.getElementById('boardLoading').classList.add('hidden');
+                document.getElementById('boardContentArea').classList.remove('hidden');
+            } catch(err) {
+                customAlert(`讀取看板資料失敗：${err.message}`, "error");
+                closeBoardModal();
+            }
+        }
+
+        function reRenderBoard() {
+            if (!currentBoardData || currentBoardData.length === 0) return;
+            const reqInputs = document.querySelectorAll('.board-req-file');
+            let rules = Array.from(reqInputs).map(inp => inp.value.trim()).filter(s => s);
+            let ruleCounts = {};
+            rules.forEach(r => { ruleCounts[r] = (ruleCounts[r] || 0) + 1; });
+            let turnedInCount = 0, missingCount = 0, warningCount = 0;
+            let html = '';
+
+            currentBoardData.forEach(student => {
+                const files = student.files || [];
+                const state = student.classroomState; 
+                let hasReq = true;
+                
+                for (const [ruleStr, requiredCount] of Object.entries(ruleCounts)) {
+                    let rulesToTest = ruleStr.includes('|') ? ruleStr.split('|').map(p=>p.trim()) : [ruleStr];
+                    let expandedRules = [];
+                    rulesToTest.forEach(r => { expandedRules.push(...generateDateVariations(r)); });
+                    
+                    let isMatch = (filename) => {
+                        if (!filename) return false;
+                        return expandedRules.some(p => filename.toLowerCase().includes(p.toLowerCase()));
+                    };
+                    
+                    let matchCount = files.filter(f => isMatch(f.title)).length;
+                    if (matchCount < requiredCount) { hasReq = false; break; }
+                }
+
+                let statusColor, statusText, statusIcon;
+                if (state === 'RETURNED') { statusColor = "bg-emerald-50 text-emerald-700 border-emerald-300"; statusText = "已發還"; statusIcon = "fa-check-double"; turnedInCount++; } 
+                else if (state === 'TURNED_IN' && hasReq) { statusColor = "bg-blue-50 text-blue-700 border-blue-300"; statusText = "已繳交"; statusIcon = "fa-file-circle-check"; turnedInCount++; } 
+                else if (state === 'TURNED_IN' && !hasReq) { statusColor = "bg-orange-50 text-orange-600 border-orange-300"; statusText = "缺附件"; statusIcon = "fa-triangle-exclamation"; warningCount++; } 
+                else if (state !== 'TURNED_IN' && hasReq && files.length > 0) { statusColor = "bg-teal-50 text-teal-700 border-teal-300"; statusText = "已上傳(未交)"; statusIcon = "fa-cloud-arrow-up"; turnedInCount++; } 
+                else { statusColor = "bg-gray-50 text-gray-500 border-gray-200"; statusText = "未繳交"; statusIcon = "fa-xmark"; missingCount++; }
+
+                let gradeHtml = "";
+                if(student.grade !== null) {
+                    if (state === 'RETURNED') gradeHtml = `<div class="absolute top-1 right-1 bg-green-200 text-green-800 text-[10px] font-black px-1.5 py-0.5 rounded shadow-sm">${student.grade} 分</div>`;
+                    else gradeHtml = `<div class="absolute top-1 right-1 bg-gray-200 text-gray-700 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">${student.grade} 草稿</div>`;
+                }
+
+                let fileListHtml = files.length > 0 ? 
+                    `<div class="text-[10px] text-gray-400 mt-1 truncate w-full text-center px-1" title="${escapeHTML(files.map(f => f.title).join('\n'))}">${files.length} 附件</div>` : 
+                    `<div class="text-[10px] text-red-300 mt-1">無附件</div>`;
+
+                html += `
+                    <div class="border rounded-xl p-2 flex flex-col items-center justify-center gap-1 shadow-sm relative transition hover:shadow-md bg-white aspect-square">
+                        ${gradeHtml}
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center text-sm sm:text-base ${statusColor.split(' ')[0]} ${statusColor.split(' ')[1]}">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="font-bold text-gray-800 text-xs sm:text-sm truncate w-full text-center px-1" title="${escapeHTML(student.name)}">${escapeHTML(student.name)}</div>
+                        <div class="text-[10px] sm:text-xs font-bold px-1 py-0.5 rounded border w-full text-center truncate ${statusColor}">
+                            <i class="fa-solid ${statusIcon} mr-1"></i>${statusText}
+                        </div>
+                        ${fileListHtml}
+                    </div>
+                `;
+            });
+
+            document.getElementById('boardGrid').innerHTML = html;
+            document.getElementById('stat-total').innerText = currentBoardData.length;
+            document.getElementById('stat-submitted').innerText = turnedInCount;
+            document.getElementById('stat-missing').innerText = missingCount;
+            document.getElementById('stat-warning').innerText = warningCount;
+        }
+
+        async function manualRefreshBoard() {
+            if (!gasCurrentCourseId || !gasCurrentCourseWorkId) return;
+            const refreshBtn = document.getElementById('manualRefreshBtn');
+            const refreshIcon = document.getElementById('manualRefreshIcon');
+            refreshBtn.disabled = true;
+            refreshIcon.classList.add('animate-spin');
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getBoardData&courseId=${gasCurrentCourseId}&courseWorkId=${gasCurrentCourseWorkId}`);
+                if (data.status === 'success') {
+                    currentBoardData = data.data || [];
+                    reRenderBoard();
+                }
+            } catch(e) {
+                console.error("更新看板失敗:", e);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshIcon.classList.remove('animate-spin');
+            }
+        }
+
+        // --- 附件一鍵打包ZIP下載 ---
+        function openDownloadModal() {
+            if (!currentBoardData || currentBoardData.length === 0) return customAlert("請先載入課程資料！", "error");
+            renderDownloadStudentList();
+            document.getElementById('downloadModal').classList.remove('hidden');
+        }
+
+        function renderDownloadStudentList() {
+            const filterText = document.getElementById('dlFilterInput').value.trim().toLowerCase();
+            const filters = filterText ? filterText.split(',').map(f => f.trim()).filter(f=>f) : [];
+            const listContainer = document.getElementById('dlStudentList');
+            let html = '';
+            currentBoardData.forEach((student, idx) => {
+                const files = student.files || [];
+                let matchCount = files.filter(file => {
+                    if (!filterText) return true;
+                    return filters.some(f => file.title.toLowerCase().includes(f));
+                }).length;
+
+                if (files.length > 0) {
+                    html += `
+                        <label class="flex items-center justify-between p-3 border-b border-slate-100 hover:bg-emerald-50 cursor-pointer">
+                            <div class="flex items-center gap-4">
+                                <input type="checkbox" class="dl-stu-cb w-5 h-5 text-emerald-600 rounded border-slate-300" value="${idx}" checked>
+                                <div><div class="font-bold text-slate-800">${escapeHTML(student.name)}</div><span class="text-xs text-slate-400">符合條件的檔案：${matchCount}個</span></div>
+                            </div>
+                        </label>
+                    `;
+                }
+            });
+            listContainer.innerHTML = html || '<p class="text-center text-gray-400 py-8">無符合的附件檔案</p>';
+        }
+
+        async function executeDownload() {
+            const filterText = document.getElementById('dlFilterInput').value.trim().toLowerCase();
+            const filters = filterText ? filterText.split(',').map(f => f.trim()).filter(f=>f) : [];
+            const selectedIndices = Array.from(document.querySelectorAll('.dl-stu-cb:checked')).map(cb => parseInt(cb.value));
+            if (selectedIndices.length === 0) return customAlert("請至少選擇一位學生！", "warning");
+
+            document.getElementById('downloadModal').classList.add('hidden');
+            const loadingOverlay = document.getElementById('boardActionLoading');
+            const loadingText = document.getElementById('boardActionLoadingText');
+            const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+            const progressBar = document.getElementById('downloadProgressBar');
+            const progressText = document.getElementById('downloadProgressText');
+            
+            loadingOverlay.classList.remove('hidden');
+            progressBarContainer.classList.remove('hidden');
+            progressText.classList.remove('hidden');
+
+            try {
+                const zip = new JSZip();
+                let successCount = 0;
+                let failCount = 0;
+
+                const tokenRes = await fetchJSONP(`${GAS_URL}?action=getToken`);
+                if (tokenRes.status === 'error' || !tokenRes.token) throw new Error("無法取得安全授權 Token。");
+                const driveToken = tokenRes.token;
+
+                for (let i = 0; i < selectedIndices.length; i++) {
+                    const student = currentBoardData[selectedIndices[i]];
+                    const files = student.files || [];
+                    const matchId = student.name.match(/\d{4,}/);
+                    let studentId = matchId ? matchId[0] : student.name;
+
+                    for (let file of files) {
+                        if (filterText && !filters.some(f => file.title.toLowerCase().includes(f))) continue;
+                        
+                        loadingText.innerText = `正在下載附件 (${i+1}/${selectedIndices.length})\n${student.name} - ${file.title}`;
+                        try {
+                            const fileUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                            const res = await fetch(fileUrl, { headers: { 'Authorization': 'Bearer ' + driveToken } });
+                            if (!res.ok) throw new Error();
+                            const blob = await res.blob();
+                            const ext = file.title.includes('.') ? file.title.substring(file.title.lastIndexOf('.')) : '';
+                            zip.file(`${studentId}${ext}`, blob);
+                            successCount++;
+                        } catch(e) {
+                            failCount++;
+                        }
+                    }
+                    const percent = Math.round(((i + 1) / selectedIndices.length) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressText.innerText = percent + '%';
+                }
+
+                loadingText.innerText = "打包封裝中...";
+                const content = await zip.generateAsync({type:"blob", compression: "STORE"});
+                const url = window.URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Classroom_作業打包.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                customAlert(`打包完畢！成功: ${successCount}個，失敗: ${failCount}個`, "success");
+            } catch(err) {
+                customAlert(`打包發生錯誤: ${err.message}`, "error");
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // --- 展示牆渲染 ---
+        function openWallCourses() { closeWallModal(); loadGasCourses('wall'); }
+        function closeWallModal() { document.getElementById('wallModal').classList.add('hidden'); }
+
+        async function fetchWallData(courseId, assignId, assignName) {
+            closeGasFileModal();
+            document.getElementById('wallModal').classList.remove('hidden');
+            document.getElementById('wallLoading').classList.remove('hidden');
+            document.getElementById('wallContentArea').classList.add('hidden');
+            document.getElementById('wallSubtitle').innerText = assignName;
+
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getBoardData&courseId=${courseId}&courseWorkId=${assignId}`);
+                if (data.status === 'error') throw new Error(data.message);
+                currentBoardData = data.data || [];
+                reRenderWall();
+                document.getElementById('wallLoading').classList.add('hidden');
+                document.getElementById('wallContentArea').classList.remove('hidden');
+            } catch(err) {
+                customAlert(`讀取展示牆失敗：${err.message}`, "error");
+                closeWallModal();
+            }
+        }
+
+        function reRenderWall() {
+            if (!currentBoardData || currentBoardData.length === 0) return;
+            const filterWord = document.getElementById('wallFilterInput').value.trim().toLowerCase();
+            let html = '';
+            let displayedCount = 0;
+
+            currentBoardData.forEach(student => {
+                const files = student.files || [];
+                files.forEach(file => {
+                    if (filterWord && !file.title.toLowerCase().includes(filterWord)) return;
+                    displayedCount++;
+                    const fileThumb = file.thumbnailUrl || "";
+                    let previewContent = '';
+                    if (fileThumb && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.title)) {
+                        previewContent = `<img src="${fileThumb}" class="w-full h-full object-cover">`;
+                    } else {
+                        previewContent = `<div class="w-full h-full bg-blue-100 flex flex-col items-center justify-center text-blue-500"><i class="fa-regular fa-file-lines text-4xl mb-2"></i><span class="text-xs font-bold">${file.title.split('.').pop().toUpperCase()}</span></div>`;
+                    }
+
+                    html += `
+                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[240px] hover:shadow-md transition">
+                            <div class="h-2/3 bg-gray-100 overflow-hidden relative">
+                                ${previewContent}
+                                <a href="${file.alternateLink}" target="_blank" class="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition flex items-center justify-center text-white font-bold text-sm">
+                                    開啟原檔
+                                </a>
+                            </div>
+                            <div class="p-3 flex-grow flex flex-col justify-between">
+                                <div class="font-black text-gray-800 text-xs truncate">${escapeHTML(file.title)}</div>
+                                <div class="flex justify-between items-center text-[10px] text-gray-400 mt-1 border-t pt-2">
+                                    <span><i class="fa-solid fa-user mr-1 text-purple-400"></i>${escapeHTML(student.name)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+            document.getElementById('wallGrid').innerHTML = html;
+            document.getElementById('wallCountText').innerText = displayedCount;
+        }
+
+        // --- 發佈新作業 ---
+        async function openCreateAssignmentModal() {
+            document.getElementById('createAssignmentModal').classList.remove('hidden');
+            document.getElementById('createAssignLoading').classList.remove('hidden');
+            document.getElementById('createAssignForm').classList.add('hidden');
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
+                if (data.status === 'error') throw new Error(data.message);
+                let options = '<option value="">請選擇發佈課程...</option>';
+                data.courses.forEach(c => { options += `<option value="${c.id}">${escapeHTML(c.name)}</option>`; });
+                document.getElementById('newAssignCourse').innerHTML = options;
+                document.getElementById('createAssignLoading').classList.add('hidden');
+                document.getElementById('createAssignForm').classList.remove('hidden');
+            } catch (err) {
+                customAlert("讀取課程失敗。\n" + err.message, "error");
+                closeCreateAssignmentModal();
+            }
+        }
+        
+        function closeCreateAssignmentModal() { document.getElementById('createAssignmentModal').classList.add('hidden'); }
+        
+        async function submitCreateAssignment() {
+            const courseId = document.getElementById('newAssignCourse').value;
+            const title = document.getElementById('newAssignTitle').value.trim();
+            const desc = document.getElementById('newAssignDesc').value.trim();
+            const pts = document.getElementById('newAssignPoints').value;
+            
+            if(!courseId || !title) return customAlert("請填寫作業名稱！", "warning");
+            
+            const btn = document.getElementById('createAssignBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>發佈中...';
+            
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=createAssignment&courseId=${courseId}&title=${encodeURIComponent(title)}&description=${encodeURIComponent(desc)}&maxPoints=${pts}`);
+                if(data.status === 'error') throw new Error(data.message);
+                
+                await customAlert(`成功建立作業：「${data.assignment.title}」！`, "success");
+                closeCreateAssignmentModal();
+            } catch (err) {
+                customAlert("建立作業失敗：" + err.message, "error");
+            } finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>發佈作業'; }
+        }
+    </script>
+</body>
+</html>
