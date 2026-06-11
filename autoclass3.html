@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>運算思維圖片評分系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .spinner { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: bold; background-color: #fff; }
+        .tab-inactive { color: #6b7280; font-weight: 500; background-color: transparent; border-bottom: 2px solid transparent;}
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+    <!-- 自訂訊息彈窗 -->
+    <div id="customModal" class="fixed inset-0 bg-black/60 hidden z-[100] flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90vw] overflow-hidden flex flex-col transform transition-all scale-95" id="customModalContent">
+            <div class="p-6 text-center">
+                <div id="customModalIcon" class="text-5xl mb-4"></div>
+                <h3 id="customModalTitle" class="text-xl font-black text-gray-800 mb-2">提示</h3>
+                <p id="customModalMessage" class="text-gray-600 text-lg font-bold whitespace-pre-wrap leading-relaxed"></p>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t" id="customModalActions"></div>
+        </div>
+    </div>
+
+    <!-- GAS 作業瀏覽彈窗 -->
+    <div id="gasFileModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-[600px] max-w-full overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center bg-green-600 p-4">
+                <h3 class="font-bold text-lg text-white" id="gasModalTitle"><i class="fa-solid fa-chalkboard-user mr-2"></i>瀏覽 Classroom 作業</h3>
+                <button onclick="closeGasFileModal()" class="text-green-100 hover:text-white transition"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div class="p-3 bg-green-50 text-sm border-b border-green-200 flex flex-col gap-2 relative">
+                <div class="flex items-center text-green-800 font-bold overflow-x-auto whitespace-nowrap custom-scrollbar pb-1" id="gasBreadcrumbs">
+                    <button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button>
+                </div>
+                <button onclick="authorizeGas()" class="absolute right-3 top-3 text-xs bg-white text-green-700 border border-green-300 px-3 py-1.5 rounded font-bold hover:bg-green-100 transition shadow-sm">
+                    <i class="fa-solid fa-key"></i> 先進行授權
+                </button>
+            </div>
+            <div id="gasLoading" class="hidden justify-center items-center py-8 text-green-600">
+                <div class="spinner !border-l-green-600 mr-2"></div><span class="font-bold" id="gasLoadingText">正在連線至 Classroom...</span>
+            </div>
+            <div id="gasFileList" class="p-4 overflow-y-auto custom-scrollbar flex-grow space-y-2 min-h-[300px]"></div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 系統主畫面                               -->
+    <!-- ========================================== -->
+    <div class="max-w-7xl mx-auto mt-2">
+        <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
+                <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
+            </h1>
+        </div>
+
+        <!-- 🌟 跨檔案相對路徑導覽選單 🌟 -->
+        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto custom-scrollbar border-b border-gray-700">
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-6 py-3 font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
+                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass4.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-video text-lg"></i> 4. 5016B 模擬影片評分系統
+            </a>
+        </div>
+
+        <div class="bg-white shadow-lg rounded-b-xl overflow-hidden min-h-[600px] flex flex-col relative">
+            <div class="absolute top-6 right-6 flex items-center gap-2 bg-white px-4 py-2 rounded-full border shadow-sm z-10">
+                <span id="ocrStatusDot" class="w-3 h-3 rounded-full bg-slate-400 animate-pulse"></span>
+                <span id="ocrStatusText" class="text-xs font-bold text-slate-600">OCR 後端連線中...</span>
+            </div>
+
+            <div class="p-6 md:p-8 flex-grow flex flex-col w-full">
+                <div class="text-center space-y-4 mb-6">
+                    <h2 class="text-3xl font-black text-emerald-800 tracking-tight"><i class="fa-solid fa-microchip mr-2 text-emerald-600"></i>運算思維圖片評分系統</h2>
+                    <p class="text-gray-500 leading-relaxed max-w-2xl mx-auto text-sm">
+                        結合 OCR 與局部 ROI 強化辨識，自動判定學生上傳的作品截圖。
+                    </p>
+                </div>
+                
+                <div id="imageUploadArea" class="w-full flex flex-col space-y-4 mb-6">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button onclick="loadGasCourses('image_grade')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-4 rounded-xl flex justify-center items-center gap-3 transition shadow-md border-b-4 border-emerald-800">
+                            <i class="fa-solid fa-chalkboard-user text-3xl"></i> 
+                            <div class="text-left leading-tight">
+                                <div class="text-sm font-medium opacity-80">步驟一</div>
+                                <div class="text-lg">匯入 Classroom 圖片名單</div>
+                            </div>
+                        </button>
+                        <div class="flex-1 border-2 border-dashed border-slate-300 bg-white rounded-xl flex items-center justify-center hover:bg-emerald-50 transition cursor-pointer relative overflow-hidden group shadow-sm" onclick="document.getElementById('manualImageFileInput').click()">
+                            <i class="fa-regular fa-image text-3xl text-slate-400 mr-4 group-hover:text-emerald-500 transition"></i>
+                            <span class="text-slate-700 font-bold group-hover:text-emerald-600 transition text-lg" id="imageFileNameDisplay">手動上傳本機圖片檔</span>
+                            <input type="file" id="manualImageFileInput" accept=".png,.jpg,.jpeg" class="hidden" onchange="handleManualImageUpload(event)">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="imageWorkspace" class="hidden flex-col lg:flex-row gap-5 border border-gray-200 rounded-2xl bg-gray-100 p-3 flex-grow min-h-[500px]">
+                    <div class="w-full lg:w-1/3 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col h-[650px] overflow-hidden">
+                        <div class="p-4 bg-emerald-800 text-white flex justify-between items-center shrink-0">
+                            <span id="imageAssignmentName" class="font-bold truncate pr-2"><i class="fa-solid fa-list-check mr-2"></i>待批改名單</span>
+                            <span id="imageStudentCount" class="text-xs bg-emerald-600 border border-emerald-500 px-3 py-1 rounded-full font-bold">0 份</span>
+                        </div>
+                        <div id="imageGradeAllContainer" class="p-3 bg-emerald-50 border-b border-emerald-100 flex flex-col gap-3 shrink-0 hidden">
+                            <div>
+                                <label class="block text-xs font-bold text-emerald-800 mb-1">指定通關判定關卡：</label>
+                                <select id="ocrLevelSelect" class="w-full border border-emerald-300 rounded-lg px-2 py-2 text-sm text-emerald-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm"></select>
+                            </div>
+                            <button id="imageGradeAllBtn" onclick="gradeAllImages()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition flex items-center justify-center gap-2 transform active:scale-95">
+                                <i class="fa-solid fa-wand-magic-sparkles text-yellow-300 text-lg"></i> <span id="imageGradeAllText" class="text-lg">一鍵辨識全班</span>
+                            </button>
+                            <label class="flex items-center justify-center space-x-2 text-sm text-emerald-800 cursor-pointer bg-white border border-emerald-200 py-2 rounded-lg shadow hover:bg-emerald-50 transition">
+                                <input type="checkbox" id="imageWriteBackScore" class="w-4 h-4 text-emerald-600 rounded" checked>
+                                <span class="font-bold"><i class="fa-solid fa-cloud-arrow-up mr-1 text-emerald-600"></i>成績同步回 Classroom</span>
+                            </label>
+                        </div>
+                        <div id="imageStudentList" class="overflow-y-auto custom-scrollbar flex-grow p-3 space-y-2 bg-slate-50"></div>
+                    </div>
+
+                    <div class="w-full lg:w-2/3 bg-white border border-gray-200 rounded-xl shadow-sm h-[650px] flex flex-col relative overflow-hidden">
+                        <div id="imageEvalLoading" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex justify-center items-center z-10">
+                            <div class="spinner !w-16 !h-16 !border-[5px] !border-t-emerald-600 mb-4"></div>
+                            <span class="font-black text-emerald-800 text-xl tracking-wide" id="imageEvalLoadingText">準備讀取圖片中...</span>
+                        </div>
+                        <div id="imageEmptyResultArea" class="flex-grow flex flex-col justify-center items-center text-slate-400 bg-slate-50">
+                            <i class="fa-solid fa-image text-6xl mb-6 text-slate-300"></i>
+                            <p class="text-xl font-bold text-slate-500 mb-2">AI 視覺助理待命中</p>
+                        </div>
+                        <div id="imageResultArea" class="hidden flex-col h-full bg-white">
+                            <div class="flex justify-between items-center p-4 border-b border-slate-100 bg-white shadow-sm shrink-0">
+                                <h3 class="font-bold text-slate-800 text-xl truncate flex items-center" id="imageResultStudentName">學生姓名</h3>
+                                <div id="imageEvalStatus" class="px-4 py-1.5 rounded-full text-sm font-bold"></div>
+                            </div>
+                            <div class="flex-grow flex flex-col overflow-hidden">
+                                <div class="w-full h-full p-4 bg-slate-100 flex items-center justify-center relative">
+                                    <img id="imageWorkspacePreview" src="" class="max-w-full max-h-full object-contain rounded shadow-sm">
+                                    <a id="imageOriginalLink" href="#" target="_blank" class="absolute bottom-4 right-4 bg-slate-800/70 hover:bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow backdrop-blur-sm transition hidden">開啟原圖</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 JavaScript 邏輯區                       -->
+    <!-- ========================================== -->
+    <script>
+        const API_URL = "https://flanking-snort-cyclic.ngrok-free.dev";
+        const GAS_URL = "https://script.google.com/a/macros/mail.qfm.kh.edu.tw/s/AKfycbydRpN2hbYelUy9sAvTYh26JlK_DBpA5NrAN-jmepXRjG4oBnGy4TTT2NWktLK4JdzSyA/exec";
+        
+        let gasCurrentCourseId = null;
+        let gasCurrentCourseWorkId = null;
+        let gasModalCaller = null; 
+        let currentImageFiles = []; 
+        let jsonpCounter = 0;
+
+        const ocrDictionaries = {
+            "ct_01": {
+                name: "運算思維01", required: ["挑戰成功"],
+                levels: [
+                    { name: "重排積木", keywords: ["重排積木", "stacked", "jenga"] },
+                    { name: "寶箱開鎖", keywords: ["寶箱開鎖", "treasure", "unlock"] },
+                    { name: "畢業手鍊", keywords: ["畢業手鍊", "graduation", "bracelet"] },
+                    { name: "彙整遊戲卡", keywords: ["彙整遊戲卡", "collecting", "point", "card"] },
+                    { name: "班級出遊", keywords: ["班級出遊", "colories", "dessert"] },
+                    { name: "夜市射氣球", keywords: ["夜市射氣球", "nightmarket", "balloon"] },
+                    { name: "團隊攀岩", keywords: ["團隊攀岩", "teamrock", "climbing"] },
+                    { name: "誰的帽子", keywords: ["誰的帽子", "whose", "hat"] }
+                ]
+            },
+            "ct_02": {
+                name: "運算思維02", required: ["挑戰成功"],
+                levels: [
+                    { name: "點心時間", keywords: ["點心時間", "snack", "time"] },
+                    { name: "地圖著色", keywords: ["地圖著色", "map", "coloring"] },
+                    { name: "收拾玩具球", keywords: ["收拾玩具球", "packaging", "toys"] },
+                    { name: "萬聖尋糖趣", keywords: ["萬聖尋糖趣", "halloween", "candy"] },
+                    { name: "行李機器人", keywords: ["行李機器人", "luggage", "robot"] },
+                    { name: "彈珠軌道", keywords: ["彈珠軌道", "marble", "track"] },
+                    { name: "單人搶糖", keywords: ["單人搶糖", "candy", "game"] },
+                    { name: "變形數獨", keywords: ["變形數獨", "sudoku", "variant"] }
+                ]
+            },
+            "ct_03": {
+                name: "運算思維03", required: ["挑戰成功"],
+                levels: [
+                    { name: "跳格子", keywords: ["跳格子", "number", "hopscotch"] },
+                    { name: "任意門", keywords: ["任意門", "dokodemo", "door"] },
+                    { name: "滑梯公園", keywords: ["滑梯公園", "slide", "park"] },
+                    { name: "水餃工廠", keywords: ["水餃工廠", "portioned", "dumplings"] },
+                    { name: "無括號計算機", keywords: ["無括號計算機", "bracketless", "calculator"] },
+                    { name: "遊覽車共乘", keywords: ["遊覽車共乘", "bus", "sharing"] },
+                    { name: "扭蛋轉轉樂", keywords: ["扭蛋轉轉樂", "spinning", "gacha"] },
+                    { name: "換零錢機", keywords: ["換零錢機", "exchange", "machine"] },
+                    { name: "打地鼠", keywords: ["打地鼠", "whac", "mole"] },
+                    { name: "拔蘿蔔", keywords: ["拔蘿蔔", "carrot", "harvest"] }
+                ]
+            },
+            "ct_04": {
+                name: "運算思維04", required: ["挑戰成功"],
+                levels: [
+                    { name: "智慧選卡", keywords: ["智慧選卡", "card", "search"] },
+                    { name: "必勝棋局", keywords: ["必勝棋局", "winnable", "chess"] },
+                    { name: "變數謎題", keywords: ["變數謎題", "variable", "puzzle"] },
+                    { name: "遊園專車", keywords: ["遊園專車", "amusement", "park", "bus"] },
+                    { name: "智慧圓環", keywords: ["智慧圓環", "enter", "ring"] },
+                    { name: "烤車輪餅", keywords: ["烤車輪餅", "grilled", "wheel", "pie"] },
+                    { name: "合作學習", keywords: ["合作學習", "cooperative", "learning"] },
+                    { name: "校慶點心", keywords: ["校慶點心", "school", "anniversary"] },
+                    { name: "夾娃娃機", keywords: ["夾娃娃機", "claw", "machine"] },
+                    { name: "兌領福袋", keywords: ["兌領福袋", "blind", "box", "exchange"] }
+                ]
+            }
+        };
+
+        function escapeHTML(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[&<>'"]/g, function(match) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match];
+            });
+        }
+
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + Date.now() + '_' + (jsonpCounter++);
+                const script = document.createElement('script');
+                const timeoutId = setTimeout(() => { cleanup(); reject(new Error("請求超時。")); }, 30000);
+                function cleanup() { delete window[callbackName]; if (script.parentNode) document.body.removeChild(script); }
+                window[callbackName] = function(data) { clearTimeout(timeoutId); cleanup(); resolve(data); };
+                const sep = url.includes('?') ? '&' : '?';
+                script.src = `${url}${sep}callback=${callbackName}`;
+                script.onerror = function() { clearTimeout(timeoutId); cleanup(); reject(new Error("無法連線至 GAS。")); };
+                document.body.appendChild(script);
+            });
+        }
+
+        function customAlert(message, type = 'info') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('customModal');
+                const icon = document.getElementById('customModalIcon');
+                const title = document.getElementById('customModalTitle');
+                const msg = document.getElementById('customModalMessage');
+                const actions = document.getElementById('customModalActions');
+
+                if (type === 'error') { icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>'; title.innerText = '未通過檢測'; } 
+                else if (type === 'success') { icon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>'; title.innerText = '通過檢測'; } 
+                else { icon.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>'; title.innerText = '系統提示'; }
+                msg.innerText = message;
+                actions.innerHTML = `<button id="customAlertBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg transition">確定</button>`;
+                modal.classList.remove('hidden');
+                document.getElementById('customAlertBtn').onclick = () => { modal.classList.add('hidden'); resolve(true); };
+            });
+        }
+
+        function closeGasFileModal() { document.getElementById('gasFileModal').classList.add('hidden'); }
+        function authorizeGas() { window.open(`${GAS_URL}?action=auth`, '_blank'); }
+        function showGasLoading(text) { document.getElementById('gasLoading').classList.replace('hidden', 'flex'); document.getElementById('gasFileList').innerHTML = ''; document.getElementById('gasLoadingText').innerText = text; }
+        function hideGasLoading() { document.getElementById('gasLoading').classList.replace('flex', 'hidden'); }
+        function updateGasBreadcrumb(html) { document.getElementById('gasBreadcrumbs').innerHTML = `<button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button> ${html}`; }
+
+        async function loadGasCourses(caller) {
+            if(caller) gasModalCaller = caller; 
+            document.getElementById('gasFileModal').classList.remove('hidden');
+            showGasLoading("正在讀取 Classroom 課程清單...");
+            updateGasBreadcrumb("");
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.courses.forEach(c => {
+                    html += `<button onclick="loadGasAssignments('${c.id}', '${escapeHTML(c.name)}')" class="w-full text-left p-4 border rounded-lg hover:bg-green-50 bg-white shadow-sm mb-2"><div class="font-bold text-gray-800 text-lg">${escapeHTML(c.name)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">課程讀取失敗。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        async function loadGasAssignments(courseId, courseName) {
+            showGasLoading(`正在讀取「${courseName}」的作業清單...`);
+            updateGasBreadcrumb(`<span class="mx-2 text-gray-400">/</span> <span class="text-green-700 truncate">${courseName}</span>`);
+            gasCurrentCourseId = courseId;
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${courseId}`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.assignments.forEach(a => {
+                    html += `<button onclick="handleGasAssignmentSelect('${courseId}', '${a.id}', '${escapeHTML(a.title)}')" class="w-full text-left p-3 border rounded-lg hover:bg-blue-50 bg-white shadow-sm mb-2"><div class="font-bold text-gray-700 truncate">${escapeHTML(a.title)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">作業讀取失敗。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        function handleGasAssignmentSelect(courseId, assignId, assignName) {
+            fetchImageSubmissions(courseId, assignId, assignName);
+        }
+
+        async function fetchImageSubmissions(courseId, assignId, assignName) {
+            showGasLoading("正在讀取繳交名單...");
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getSubmissions&courseId=${courseId}&courseWorkId=${assignId}`);
+                if(data.status === 'error') throw new Error(data.message);
+                closeGasFileModal();
+                document.getElementById('imageWorkspace').classList.remove('hidden');
+                document.getElementById('imageWorkspace').classList.add('flex');
+                document.getElementById('imageAssignmentName').innerText = assignName;
+
+                const allFiles = data.files || [];
+                currentImageFiles = allFiles.filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f.name));
+                document.getElementById('imageStudentCount').innerText = `${currentImageFiles.length} 份`;
+
+                let html = '';
+                if(currentImageFiles.length === 0) {
+                    html = '<p class="text-center text-gray-400 py-8">找不到圖片類型的繳交作品</p>';
+                } else {
+                    document.getElementById('imageGradeAllContainer').classList.remove('hidden');
+                    currentImageFiles.forEach((file, index) => {
+                        html += `<button id="img-btn-${index}" onclick="gradeImageStudent('${file.id}', '${file.submissionId}', '${escapeHTML(file.name)}', 'img-btn-${index}')" class="w-full text-left p-3 border rounded-lg hover:border-emerald-400 transition bg-white shadow-sm relative overflow-hidden mb-2"><div class="font-bold text-slate-700 text-sm truncate">${escapeHTML(file.name)}</div><div id="img-score-${index}" class="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-300">未辨識</div></button>`;
+                    });
+                }
+                document.getElementById('imageStudentList').innerHTML = html;
+            } catch(e) {
+                customAlert("載入繳交名單失敗。");
+            } finally { hideGasLoading(); }
+        }
+
+        async function handleManualImageUpload(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+            document.getElementById('imageFileNameDisplay').innerText = file.name;
+            document.getElementById('imageWorkspace').classList.remove('hidden');
+            document.getElementById('imageWorkspace').classList.add('flex');
+            document.getElementById('imageEmptyResultArea').classList.add('hidden');
+            document.getElementById('imageResultArea').classList.add('hidden');
+            
+            const loading = document.getElementById('imageEvalLoading');
+            loading.classList.remove('hidden');
+
+            try {
+                const objectUrl = URL.createObjectURL(file);
+                document.getElementById('imageWorkspacePreview').src = objectUrl;
+                
+                const formData = new FormData();
+                formData.append('file', file, file.name);
+
+                const response = await fetch(`${API_URL}/analyze`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
+                if (!response.ok) throw new Error("無法連線至後端 OCR 伺服器");
+                const result = await response.json();
+
+                const rawTexts = result.raw_text || [];
+                const fullTextStr = rawTexts.join('\n').toLowerCase();
+                let isPass = false;
+                let passReason = "未通過檢測";
+
+                const selectedVal = document.getElementById('ocrLevelSelect').value;
+                if (selectedVal === "") {
+                    const passKeywords = ['挑戰成功', '過關', '通關', 'success'];
+                    isPass = passKeywords.some(kw => fullTextStr.includes(kw.toLowerCase()));
+                    passReason = isPass ? "通過：符合通關字眼" : "未通過檢測";
+                } else {
+                    const [catKey, levelIdx] = selectedVal.split('-');
+                    const category = ocrDictionaries[catKey];
+                    const level = category.levels[parseInt(levelIdx)];
+                    const hasRequired = category.required.some(req => fullTextStr.includes(req.toLowerCase()));
+                    const hasKeyword = level.keywords.some(kw => fullTextStr.includes(kw.toLowerCase()));
+                    
+                    if (hasRequired && hasKeyword) {
+                        isPass = true;
+                        passReason = `符合【${category.name} - ${level.name}】`;
+                    } else {
+                        passReason = "未通過：不符合關卡特徵關鍵字";
+                    }
+                }
+
+                document.getElementById('imageResultStudentName').innerText = `本機檔案：${file.name}`;
+                const statusBadge = document.getElementById('imageEvalStatus');
+                if (isPass) {
+                    statusBadge.className = 'px-4 py-1.5 rounded-full text-sm font-bold bg-emerald-100 text-emerald-700 border border-emerald-200';
+                    statusBadge.innerHTML = '🟢 標準通關';
+                } else {
+                    statusBadge.className = 'px-4 py-1.5 rounded-full text-sm font-bold bg-rose-100 text-rose-700 border border-rose-200';
+                    statusBadge.innerHTML = '🔴 未達標準';
+                }
+                document.getElementById('imageResultArea').classList.remove('hidden');
+                customAlert(passReason, isPass ? 'success' : 'error');
+            } catch(e) {
+                customAlert("辨識連線失敗。");
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function checkConnection() {
+            try {
+                await fetch(`${API_URL}/ping`, { method: 'GET', headers: {'ngrok-skip-browser-warning': 'true'} });
+                document.getElementById('ocrStatusDot').className = 'w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
+            } catch(e) {}
+        }
+
+        async function checkOcrConnection() {
+            try {
+                await fetch(`${API_URL}/health`, { method: 'GET', headers: {'ngrok-skip-browser-warning': 'true'} });
+                document.getElementById('ocrStatusDot').className = 'w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
+                document.getElementById('ocrStatusText').innerText = 'OCR 後端連線正常';
+            } catch (err) {
+                document.getElementById('ocrStatusDot').className = 'w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
+                document.getElementById('ocrStatusText').innerText = 'OCR 未連線';
+            }
+        }
+    </script>
+</body>
+</html>
