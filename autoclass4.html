@@ -45,38 +45,40 @@
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 </head>
-<body class="bg-slate-100 h-screen flex flex-col p-2 md:p-4 overflow-hidden text-slate-800">
+<body class="bg-slate-200 h-screen flex flex-col p-2 md:p-4 overflow-hidden text-slate-800">
 
-    <!-- ========================================== -->
-    <!-- 🟢 系統頂部導覽列 (整合 a04.txt 外觀)       -->
-    <!-- ========================================== -->
-    <div class="max-w-[1600px] mx-auto w-full shrink-0 mb-4">
-        <div class="flex justify-center items-center bg-white p-3 rounded-t-xl border-b shadow-sm">
-            <h1 class="text-xl md:text-2xl font-black text-gray-800 tracking-wide">
+    <!-- 整個系統容器 (統一的陰影與圓角佈局) -->
+    <div class="max-w-[1600px] mx-auto w-full flex flex-col h-full overflow-hidden shadow-xl rounded-xl">
+        
+        <!-- ========================================== -->
+        <!-- 🟢 系統頂部導覽列 (完全同步 a03 / a04 外觀)   -->
+        <!-- ========================================== -->
+        <div class="flex justify-center items-center bg-white p-5 border-b shrink-0">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
             </h1>
         </div>
 
-        <div class="bg-gray-800 px-4 pt-2 flex overflow-x-auto border-b border-gray-700 rounded-b-xl shadow-md custom-scrollbar">
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto border-b border-gray-700 shrink-0 custom-scrollbar">
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
             </a>
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
-                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分系統
             </a>
-            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
-                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片評分系統
             </a>
-            <a href="#" class="px-4 py-2 text-sm md:text-base font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
-                <i class="fa-solid fa-video text-lg"></i> 4. AI 跨模態視覺檢核 V6
+            <a href="#" class="px-6 py-3 font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
+                <i class="fa-solid fa-video text-lg"></i> 4. AI 影片檢核系統 V6
             </a>
         </div>
-    </div>
 
-    <!-- ========================================== -->
-    <!-- 🟢 React V6 應用程式掛載點                 -->
-    <!-- ========================================== -->
-    <div id="root" class="w-full flex-1 max-w-[1600px] mx-auto overflow-hidden relative"></div>
+        <!-- ========================================== -->
+        <!-- 🟢 React V6 應用程式掛載點                 -->
+        <!-- ========================================== -->
+        <div id="root" class="bg-slate-100 flex-1 relative overflow-hidden flex flex-col"></div>
+    </div>
 
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
