@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scratch 智慧評分系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .spinner { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: bold; background-color: #fff; }
+        .tab-inactive { color: #6b7280; font-weight: 500; background-color: transparent; border-bottom: 2px solid transparent;}
+        
+        .scratch-block {
+            display: inline-block; padding: 4px 12px; color: white; font-weight: bold;
+            font-size: 13px; border-radius: 4px; box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+            position: relative; margin-bottom: 2px;
+        }
+        .scratch-block::before {
+            content: ''; position: absolute; top: 0; left: 10px; width: 15px; height: 4px;
+            background: rgba(0,0,0,0.1); border-radius: 0 0 4px 4px;
+        }
+        
+        .block-motion { background-color: #4C97FF; }
+        .block-looks { background-color: #9966FF; }
+        .block-events { background-color: #FFBF00; border-radius: 10px 10px 4px 4px; }
+        .block-control { background-color: #FFAB19; }
+        .block-operators { background-color: #59C059; border-radius: 12px; }
+        .block-pen { background-color: #0fBD8C; }
+        .block-var { background-color: #FF8C1A; border-radius: 12px; }
+        .block-sensing { background-color: #5CB1D6; }
+        .block-structural { background-color: transparent; color: #FFAB19; font-weight: bold; padding: 2px 0; box-shadow: none; margin-left: -10px;}
+        .block-structural::before { display: none; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+    <!-- 自訂訊息彈窗 -->
+    <div id="customModal" class="fixed inset-0 bg-black/60 hidden z-[100] flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90vw] overflow-hidden flex flex-col transform transition-all scale-95" id="customModalContent">
+            <div class="p-6 text-center">
+                <div id="customModalIcon" class="text-5xl mb-4"></div>
+                <h3 id="customModalTitle" class="text-xl font-black text-gray-800 mb-2">提示</h3>
+                <p id="customModalMessage" class="text-gray-600 text-lg font-bold whitespace-pre-wrap leading-relaxed"></p>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t" id="customModalActions"></div>
+        </div>
+    </div>
+
+    <!-- GAS 作業瀏覽彈窗 -->
+    <div id="gasFileModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-[600px] max-w-full overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center bg-green-600 p-4">
+                <h3 class="font-bold text-lg text-white" id="gasModalTitle"><i class="fa-solid fa-chalkboard-user mr-2"></i>瀏覽 Classroom 作業</h3>
+                <button onclick="closeGasFileModal()" class="text-green-100 hover:text-white transition"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div class="p-3 bg-green-50 text-sm border-b border-green-200 flex flex-col gap-2 relative">
+                <div class="flex items-center text-green-800 font-bold overflow-x-auto whitespace-nowrap custom-scrollbar pb-1" id="gasBreadcrumbs">
+                    <button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button>
+                </div>
+                <button onclick="authorizeGas()" class="absolute right-3 top-3 text-xs bg-white text-green-700 border border-green-300 px-3 py-1.5 rounded font-bold hover:bg-green-100 transition shadow-sm">
+                    <i class="fa-solid fa-key"></i> 先進行授權
+                </button>
+            </div>
+            <div id="gasLoading" class="hidden justify-center items-center py-8 text-green-600">
+                <div class="spinner !border-l-green-600 mr-2"></div><span class="font-bold" id="gasLoadingText">正在連線至 Classroom...</span>
+            </div>
+            <div id="gasFileList" class="p-4 overflow-y-auto custom-scrollbar flex-grow space-y-2 min-h-[300px]"></div>
+        </div>
+    </div>
+
+    <!-- 角色篩選彈窗 -->
+    <div id="targetFilterModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-2xl w-96 max-w-full overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center bg-blue-600 p-4">
+                <h3 class="font-bold text-lg text-white"><i class="fa-solid fa-filter mr-2"></i>選擇要評分的角色</h3>
+                <button onclick="closeTargetFilterModal()" class="text-blue-100 hover:text-white transition"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div class="p-4 bg-blue-50 text-sm text-blue-800 border-b border-blue-100">
+                <div class="mb-3">取消打勾的角色將會從畫面中隱藏，並且<strong>不會列入評分比對條件</strong>中。</div>
+                <div class="flex justify-end gap-2">
+                    <button onclick="setAllModalCheckboxes(true)" class="text-xs bg-blue-200 text-blue-800 px-3 py-1.5 rounded font-bold hover:bg-blue-300 transition">全選</button>
+                    <button onclick="setAllModalCheckboxes(false)" class="text-xs bg-white text-blue-600 border border-blue-300 px-3 py-1.5 rounded font-bold hover:bg-white-100 transition">全部取消</button>
+                </div>
+            </div>
+            <div id="targetFilterList" class="p-4 overflow-y-auto custom-scrollbar flex-grow space-y-2"></div>
+            <div class="border-t p-4 flex justify-end bg-gray-50 gap-2">
+                <button onclick="closeTargetFilterModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">取消</button>
+                <button onclick="applyTargetFilter()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">套用設定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 系統主畫面                               -->
+    <!-- ========================================== -->
+    <div class="max-w-7xl mx-auto mt-2">
+        <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
+                <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
+            </h1>
+        </div>
+
+        <!-- 🌟 跨檔案相對路徑導覽選單 🌟 -->
+        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto custom-scrollbar border-b border-gray-700">
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass2.html" class="px-6 py-3 font-bold border-b-4 rounded-t-lg transition flex items-center gap-2 whitespace-nowrap border-blue-500 bg-gray-700 text-white">
+                <i class="fa-solid fa-cat text-lg"></i> 2. Scratch 智慧評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass3.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-regular fa-image text-lg"></i> 3. 運算思維圖片評分系統
+            </a>
+            <a href="https://su-yung-sheng.github.io/autoclass/autoclass4.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-video text-lg"></i> 4. 5016B 模擬影片評分系統
+            </a>
+        </div>
+
+        <div class="bg-white shadow-lg rounded-b-xl overflow-hidden min-h-[600px] flex flex-col">
+            <div class="bg-white px-4 pt-2 border-b flex justify-between items-center overflow-x-auto custom-scrollbar shadow-sm">
+                <div class="flex">
+                    <button onclick="switchScratchTab('teacher')" id="scratch-tab-btn-teacher" class="px-6 py-3 tab-active flex items-center gap-2 whitespace-nowrap transition">
+                        <i class="fa-solid fa-chalkboard-user"></i> (1) 教師設定端
+                    </button>
+                    <button onclick="switchScratchTab('workspace')" id="scratch-tab-btn-workspace" class="px-6 py-3 tab-inactive flex items-center gap-2 whitespace-nowrap transition hover:bg-gray-50">
+                        <i class="fa-solid fa-laptop-file"></i> (2) 批改工作區
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full border shadow-inner mr-2 shrink-0">
+                    <span id="statusDot" class="w-3 h-3 rounded-full bg-gray-400 animate-pulse"></span>
+                    <span id="statusText" class="text-xs font-bold text-gray-600">後端連線中...</span>
+                </div>
+            </div>
+
+            <!-- 教師設定端 -->
+            <div id="scratch-tab-content-teacher" class="p-6 block flex-grow">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 flex flex-col h-[500px]">
+                        <h4 class="font-bold text-gray-700 border-b pb-2 mb-3 shrink-0"><i class="fa-solid fa-upload mr-1"></i> 1. 上傳解答與測資</h4>
+                        <div class="border-2 border-dashed border-blue-300 bg-white rounded-lg p-6 text-center hover:bg-blue-50 transition cursor-pointer flex-grow flex flex-col justify-center items-center" onclick="document.getElementById('teacherFileInput').click()">
+                            <i class="fa-solid fa-file-code text-4xl text-blue-400 mb-2"></i>
+                            <p class="text-sm text-gray-600 font-medium" id="teacherFileNameDisplay">點擊上傳包含測資結果的 .sb3解答檔</p>
+                            <input type="file" id="teacherFileInput" accept=".sb3" class="hidden" onchange="handleTeacherUpload()" onclick="event.stopPropagation()">
+                        </div>
+                        <div class="mt-4 border-t pt-3">
+                            <h5 class="text-sm font-bold text-gray-700 mb-2"><i class="fa-solid fa-check-double mr-1 text-blue-500"></i>變數測資驗證</h5>
+                            <div id="parsedVariablesDisplay" class="bg-white border rounded p-3 h-32 overflow-y-auto custom-scrollbar text-sm space-y-2">
+                                <p class="text-gray-400 italic w-full text-center mt-4">請先上傳解答檔案...</p>
+                            </div>
+                        </div>
+                        <div id="parseLoading" class="hidden justify-center items-center py-2 space-x-2 text-blue-600 mt-2 shrink-0">
+                            <div class="spinner"></div><span class="text-sm font-bold">正在拆解深層積木結構...</span>
+                        </div>
+                    </div>
+
+                    <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 flex flex-col h-[500px]">
+                        <div class="flex justify-between items-center border-b pb-2 mb-3 shrink-0">
+                            <h4 class="font-bold text-gray-800"><i class="fa-solid fa-sitemap text-blue-500 mr-2"></i>步驟二：程式邏輯結構設定</h4>
+                            <div class="flex space-x-2">
+                                <button onclick="openTargetFilterModal()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded font-bold hover:bg-purple-200 shadow-sm transition"><i class="fa-solid fa-filter mr-1"></i>篩選角色</button>
+                                <button onclick="selectAllBlocks()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 shadow-sm transition">展開全選</button>
+                            </div>
+                        </div>
+                        <div id="parsedSequencesDisplay" class="bg-white border rounded p-4 flex-grow overflow-y-auto custom-scrollbar min-h-0">
+                            <p class="text-gray-400 text-sm italic w-full text-center mt-12"><i class="fa-solid fa-puzzle-piece text-4xl mb-3 text-gray-300 block"></i>等待解析積木...</p>
+                        </div>
+                    </div>
+
+                    <div class="border border-blue-200 rounded-lg p-5 bg-blue-50 flex flex-col lg:col-span-2 shadow-sm">
+                        <h4 class="font-bold text-blue-900 border-b border-blue-200 pb-2 mb-4 shrink-0"><i class="fa-solid fa-clipboard-check mr-2"></i>步驟三：評分總結與配分</h4>
+                        <div class="bg-white border border-blue-100 rounded-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center shadow-sm">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">本題滿分設定：</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="customScoreInput" value="100" class="w-24 border-2 rounded-lg p-2 text-center font-black text-blue-600 focus:ring-2 focus:ring-blue-400 outline-none">
+                                    <span class="font-bold text-gray-600">分</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 md:mt-0 space-y-3 flex flex-col md:flex-row gap-5 items-center">
+                                <label class="flex items-center space-x-2 cursor-pointer bg-red-50 text-red-700 px-4 py-2.5 rounded-lg border border-red-200 transition hover:bg-red-100">
+                                    <input type="checkbox" id="strictMode" class="w-5 h-5 text-red-600 rounded">
+                                    <span class="text-sm font-bold">開啟嚴格模式 (積木順序不可穿插)</span>
+                                </label>
+                                <button onclick="switchScratchTab('workspace')" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold shadow-md transition">
+                                    前往批改工作區 <i class="fa-solid fa-arrow-right ml-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 批改工作區 -->
+            <div id="scratch-tab-content-workspace" class="p-6 hidden min-h-[600px] flex-col flex-grow bg-gray-50">
+                <div id="studentWarning" class="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded p-4 mb-6 text-sm w-full mx-auto max-w-4xl shadow-sm">
+                    <p class="font-bold">⚠️ 系統提醒：請先在「教師設定端」完成解答檔案與比對設定，才能進入批改工作區！</p>
+                </div>
+                
+                <div id="studentUploadArea" class="hidden w-full flex-grow flex flex-col space-y-4">
+                    <div class="flex flex-col sm:flex-row gap-4 mb-2">
+                        <button onclick="loadGasCourses('scratch')" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-4 rounded-xl flex justify-center items-center gap-3 transition shadow-md text-lg">
+                            <i class="fa-solid fa-chalkboard-user text-3xl"></i> 
+                            <div class="text-left leading-tight">
+                                <div class="text-sm font-medium opacity-80">步驟一</div>
+                                <div>匯入 Classroom 作業名單</div>
+                            </div>
+                        </button>
+                        <div class="flex-1 border-2 border-dashed border-gray-300 bg-white rounded-xl flex items-center justify-center hover:bg-blue-50 transition cursor-pointer relative overflow-hidden group shadow-sm" onclick="document.getElementById('studentFileInput').click()">
+                            <i class="fa-solid fa-laptop-file text-3xl text-gray-400 mr-4 group-hover:text-blue-500 transition"></i>
+                            <span class="text-gray-700 font-bold group-hover:text-blue-600 transition text-lg" id="studentFileNameDisplay">手動上傳本機 .sb3 作品</span>
+                            <input type="file" id="studentFileInput" accept=".sb3" class="hidden" onchange="handleManualUpload()">
+                        </div>
+                    </div>
+
+                    <div id="classroomWorkspace" class="flex flex-col lg:flex-row gap-5 border border-gray-200 rounded-2xl bg-gray-100 p-3 flex-grow min-h-[500px]">
+                        <div class="w-full lg:w-1/3 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col h-[650px] overflow-hidden">
+                            <div class="p-4 bg-gray-800 text-white flex justify-between items-center shrink-0">
+                                <span id="currentAssignmentName" class="font-bold truncate pr-2"><i class="fa-solid fa-list-check mr-2"></i>待批改名單</span>
+                                <span id="studentCount" class="text-xs bg-gray-600 border border-gray-500 px-3 py-1 rounded-full font-bold">0 份</span>
+                            </div>
+                            <div id="gradeAllContainer" class="p-3 bg-blue-50 border-b border-blue-100 hidden shrink-0 flex flex-col gap-3">
+                                <button id="gradeAllBtn" onclick="gradeAllStudents()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition flex items-center justify-center gap-2 transform active:scale-95">
+                                    <i class="fa-solid fa-bolt text-yellow-300 text-lg"></i> <span id="gradeAllText" class="text-lg">一鍵批改全班</span>
+                                </button>
+                                <label class="flex items-center justify-center space-x-2 text-sm text-green-800 cursor-pointer bg-white border border-green-200 py-2 rounded-lg shadow-sm hover:bg-green-50 transition">
+                                    <input type="checkbox" id="writeBackScore" class="w-4 h-4 text-green-600 rounded" checked>
+                                    <span class="font-bold"><i class="fa-solid fa-cloud-arrow-up mr-1 text-green-600"></i>自動成績同步回 Classroom</span>
+                                </label>
+                            </div>
+                            <div id="workspaceStudentList" class="overflow-y-auto custom-scrollbar flex-grow p-3 space-y-2 bg-gray-50"></div>
+                        </div>
+
+                        <div class="w-full lg:w-2/3 bg-white border border-gray-200 rounded-xl shadow-sm h-[650px] flex flex-col relative overflow-hidden">
+                            <div id="evalLoading" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex justify-center items-center z-10">
+                                <div class="spinner !w-16 !h-16 !border-[5px] !border-t-blue-600 mb-4"></div>
+                                <span class="font-black text-blue-800 text-xl tracking-wide" id="evalLoadingText">正在下載檔案中...</span>
+                            </div>
+                            <div id="emptyResultArea" class="flex-grow flex flex-col justify-center items-center text-gray-400 bg-gray-50">
+                                <i class="fa-solid fa-robot text-6xl mb-6 text-gray-300"></i>
+                                <p class="text-xl font-bold text-gray-500 mb-2">AI 批改助理待命中</p>
+                            </div>
+                            <div id="resultArea" class="hidden flex-col h-full bg-white">
+                                <div class="flex justify-between items-center p-5 border-b border-gray-100 bg-white shadow-sm shrink-0 z-0">
+                                    <h3 class="font-bold text-gray-800 text-2xl truncate flex items-center" id="resultStudentName">學生姓名</h3>
+                                    <div class="bg-blue-50 border-2 border-blue-200 px-5 py-2 rounded-xl shadow-inner flex items-center">
+                                        <span class="text-blue-900 font-black text-3xl" id="scoreDisplay">0</span>
+                                        <span class="text-blue-600 font-bold ml-1 mt-2">分</span>
+                                    </div>
+                                </div>
+                                <div class="p-5 flex-grow overflow-hidden flex flex-col bg-gray-50">
+                                    <pre id="feedbackDisplay" class="text-sm text-gray-800 whitespace-pre-wrap font-mono bg-white p-5 rounded-xl border border-gray-200 flex-grow overflow-y-auto custom-scrollbar leading-relaxed shadow-sm"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🟢 JavaScript 邏輯區                       -->
+    <!-- ========================================== -->
+    <script>
+        const API_URL = "https://flanking-snort-cyclic.ngrok-free.dev";
+        const GAS_URL = "https://script.google.com/a/macros/mail.qfm.kh.edu.tw/s/AKfycbydRpN2hbYelUy9sAvTYh26JlK_DBpA5NrAN-jmepXRjG4oBnGy4TTT2NWktLK4JdzSyA/exec";
+        
+        let teacherFileObj = null;
+        let parsedTeacherData = null;
+        let currentStudentFiles = [];
+        let gasCurrentCourseId = null;
+        let gasCurrentCourseWorkId = null;
+        let gasModalCaller = null;
+        let jsonpCounter = 0;
+
+        function escapeHTML(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[&<>'"]/g, function(match) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match];
+            });
+        }
+
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + Date.now() + '_' + (jsonpCounter++);
+                const script = document.createElement('script');
+                const timeoutId = setTimeout(() => { cleanup(); reject(new Error("請求超時。")); }, 30000);
+                function cleanup() { delete window[callbackName]; if (script.parentNode) document.body.removeChild(script); }
+                window[callbackName] = function(data) { clearTimeout(timeoutId); cleanup(); resolve(data); };
+                const sep = url.includes('?') ? '&' : '?';
+                script.src = `${url}${sep}callback=${callbackName}`;
+                script.onerror = function() { clearTimeout(timeoutId); cleanup(); reject(new Error("無法連線至 GAS。")); };
+                document.body.appendChild(script);
+            });
+        }
+
+        function customAlert(message, type = 'info') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('customModal');
+                const icon = document.getElementById('customModalIcon');
+                const title = document.getElementById('customModalTitle');
+                const msg = document.getElementById('customModalMessage');
+                const actions = document.getElementById('customModalActions');
+
+                if (type === 'error') { icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>'; title.innerText = '發生錯誤'; } 
+                else if (type === 'success') { icon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>'; title.innerText = '成功'; } 
+                else { icon.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>'; title.innerText = '系統提示'; }
+                msg.innerText = message;
+                actions.innerHTML = `<button id="customAlertBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition">確定</button>`;
+                modal.classList.remove('hidden');
+                document.getElementById('customAlertBtn').onclick = () => { modal.classList.add('hidden'); resolve(true); };
+            });
+        }
+
+        function closeGasFileModal() { document.getElementById('gasFileModal').classList.add('hidden'); }
+        function authorizeGas() { window.open(`${GAS_URL}?action=auth`, '_blank'); }
+        function showGasLoading(text) { document.getElementById('gasLoading').classList.replace('hidden', 'flex'); document.getElementById('gasFileList').innerHTML = ''; document.getElementById('gasLoadingText').innerText = text; }
+        function hideGasLoading() { document.getElementById('gasLoading').classList.replace('flex', 'hidden'); }
+        function updateGasBreadcrumb(html) { document.getElementById('gasBreadcrumbs').innerHTML = `<button onclick="loadGasCourses()" class="hover:text-green-600 transition flex items-center"><i class="fa-solid fa-house mr-1"></i>我的課程</button> ${html}`; }
+
+        async function loadGasCourses(caller) {
+            if(caller) gasModalCaller = caller; 
+            document.getElementById('gasFileModal').classList.remove('hidden');
+            showGasLoading("正在讀取 Classroom 課程清單...");
+            updateGasBreadcrumb("");
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.courses.forEach(c => {
+                    html += `<button onclick="loadGasAssignments('${c.id}', '${escapeHTML(c.name)}')" class="w-full text-left p-4 border rounded-lg hover:bg-green-50 hover:border-green-400 transition bg-white shadow-sm mb-2"><div class="font-bold text-gray-800 text-lg">${escapeHTML(c.name)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">讀取失敗，請確認已授權。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        async function loadGasAssignments(courseId, courseName) {
+            showGasLoading(`正在讀取「${courseName}」的作業清單...`);
+            updateGasBreadcrumb(`<span class="mx-2 text-gray-400">/</span> <span class="text-green-700 truncate">${courseName}</span>`);
+            gasCurrentCourseId = courseId;
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${courseId}`);
+                if(data.status === 'error') throw new Error(data.message);
+                let html = '';
+                data.assignments.forEach(a => {
+                    html += `<button onclick="handleGasAssignmentSelect('${courseId}', '${a.id}', '${escapeHTML(a.title)}')" class="w-full text-left p-3 border rounded-lg hover:bg-blue-50 transition bg-white shadow-sm mb-2"><div class="font-bold text-gray-700 truncate">${escapeHTML(a.title)}</div></button>`;
+                });
+                document.getElementById('gasFileList').innerHTML = html;
+            } catch (err) {
+                document.getElementById('gasFileList').innerHTML = `<div class="text-red-500 p-4">作業清單讀取失敗。</div>`;
+            } finally { hideGasLoading(); }
+        }
+
+        function handleGasAssignmentSelect(courseId, assignId, assignName) {
+            fetchClassroomSubmissions(courseId, assignId, assignName);
+        }
+
+        function switchScratchTab(tab) {
+            ['teacher', 'workspace'].forEach(t => {
+                document.getElementById(`scratch-tab-content-${t}`).classList.toggle('hidden', t !== tab);
+                document.getElementById(`scratch-tab-content-${t}`).classList.toggle('flex', t === tab);
+                const btn = document.getElementById(`scratch-tab-btn-${t}`);
+                if (t === tab) btn.className = "px-6 py-3 tab-active flex items-center gap-2 whitespace-nowrap transition";
+                else btn.className = "px-6 py-3 tab-inactive flex items-center gap-2 whitespace-nowrap transition hover:bg-gray-50";
+            });
+            if (tab === 'workspace') {
+                if (teacherFileObj && parsedTeacherData) {
+                    document.getElementById('studentWarning').classList.add('hidden');
+                    document.getElementById('studentUploadArea').classList.remove('hidden');
+                } else {
+                    document.getElementById('studentWarning').classList.remove('hidden');
+                    document.getElementById('studentUploadArea').classList.add('hidden');
+                }
+            }
+        }
+
+        async function checkConnection() {
+            try {
+                await fetch(`${API_URL}/ping`, { method: 'GET', headers: {'ngrok-skip-browser-warning': 'true'} });
+                document.getElementById('statusDot').className = 'w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
+                document.getElementById('statusText').innerText = '後端連線正常';
+            } catch (err) {
+                document.getElementById('statusDot').className = 'w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
+                document.getElementById('statusText').innerText = '後端未連線 (Colab 異常)';
+            }
+        }
+
+        // --- Scratch 解算核心與 UI 處理 ---
+        async function handleTeacherUpload() {
+            const fileInput = document.getElementById('teacherFileInput');
+            if (!fileInput.files.length) return;
+            teacherFileObj = fileInput.files[0];
+            document.getElementById('teacherFileNameDisplay').innerHTML = `<span class="text-blue-700 font-bold">${escapeHTML(teacherFileObj.name)}</span>`;
+            document.getElementById('parseLoading').classList.replace('hidden', 'flex');
+            document.getElementById('parsedVariablesDisplay').innerHTML = '';
+            document.getElementById('parsedSequencesDisplay').innerHTML = '';
+            document.getElementById('targetFilterList').innerHTML = '';
+
+            const formData = new FormData();
+            formData.append('file', teacherFileObj);
+
+            try {
+                const response = await fetch(`${API_URL}/parse`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
+                if(!response.ok) throw new Error(`HTTP 異常：${response.status}`);
+                parsedTeacherData = await response.json();
+                
+                let varsHtml = '';
+                if(Object.keys(parsedTeacherData.variables).length > 0) {
+                    for (const [vName, vVal] of Object.entries(parsedTeacherData.variables)) {
+                        varsHtml += `<div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded border border-gray-200"><input type="checkbox" class="var-checkbox text-blue-600" data-varname="${escapeHTML(vName)}"><label class="scratch-block block-var">${escapeHTML(vName)}</label><span class="text-gray-500">=</span><input type="text" class="var-expected-val border rounded px-2 py-0.5 w-20 text-blue-600 font-bold" value="${escapeHTML(vVal)}"></div>`;
+                    }
+                } else varsHtml = '<p class="text-gray-400 text-sm italic">此檔案沒有全域變數。</p>';
+                document.getElementById('parsedVariablesDisplay').innerHTML = varsHtml;
+
+                let seqHtml = '', modalListHtml = '';
+                if (parsedTeacherData.sequences && parsedTeacherData.sequences.length > 0) {
+                    const grouped = {};
+                    parsedTeacherData.sequences.forEach((item, idx) => {
+                        const targetName = item.target || "角色";
+                        if(!grouped[targetName]) grouped[targetName] = [];
+                        grouped[targetName].push({seq: item.seq || item, originalIdx: idx});
+                    });
+
+                    let targetIndex = 0;
+                    for (const [targetName, scripts] of Object.entries(grouped)) {
+                        const targetId = `target-${targetIndex}`;
+                        const displayName = escapeHTML(targetName === 'Stage' || targetName === '舞台' ? '舞台' : `角色：${targetName}`); 
+                        modalListHtml += `<label class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer shadow-sm"><div class="flex items-center space-x-3"><input type="checkbox" id="modal-chk-${targetId}" value="${targetId}" class="w-5 h-5 text-blue-600" checked><span class="font-bold text-gray-700">${displayName}</span></div><span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-bold">${scripts.length} 堆疊</span></label>`;
+
+                        seqHtml += `<div id="target-wrapper-${targetId}" class="mb-5 border-2 border-blue-200 rounded-lg overflow-hidden shadow-sm bg-white"><div class="bg-blue-100 px-3 py-2 flex items-center justify-between border-b border-blue-200"><label class="flex items-center space-x-2 font-bold text-blue-800 cursor-pointer"><input type="checkbox" checked class="w-4 h-4 text-blue-600 rounded" onchange="toggleTargetBlocks('${targetId}', this.checked)"><span>${displayName}</span></label></div><div class="p-3 bg-gray-50 target-group-${targetId}">`;
+                        
+                        scripts.forEach((scriptData, idxInGroup) => {
+                            seqHtml += `<div class="mb-4 bg-white p-3 rounded border shadow-sm"><div class="text-xs text-gray-400 font-bold mb-2 pb-2 border-b">腳本 ${idxInGroup + 1}</div>`;
+                            let indent = 0;
+                            scriptData.seq.forEach((step, blockIdx) => {
+                                const styleClass = getBlockStyle(step);
+                                const uniqueId = `chk-${scriptData.originalIdx}-${blockIdx}`;
+                                const escStep = escapeHTML(step); 
+                                if (step.includes('開始')) { seqHtml += `<div class="flex items-center mb-1" style="margin-left: ${indent}px"><input type="checkbox" id="${uniqueId}" value="${escStep}" data-seq="${scriptData.originalIdx}" class="mr-2 rule-checkbox text-blue-600" checked><label for="${uniqueId}" class="scratch-block block-structural"><i class="fa-solid fa-arrow-turn-down mr-1"></i>${escStep}</label></div>`; indent += 20; } 
+                                else if (step.includes('結束')) { indent = Math.max(0, indent - 20); seqHtml += `<div class="flex items-center mb-1" style="margin-left: ${indent}px"><input type="checkbox" id="${uniqueId}" value="${escStep}" data-seq="${scriptData.originalIdx}" class="mr-2 rule-checkbox text-blue-600" checked><label for="${uniqueId}" class="scratch-block block-structural"><i class="fa-solid fa-arrow-turn-up mr-1"></i>${escStep}</label></div>`; } 
+                                else { seqHtml += `<div class="flex items-center" style="margin-left: ${indent}px"><input type="checkbox" id="${uniqueId}" value="${escStep}" data-seq="${scriptData.originalIdx}" class="mr-2 rule-checkbox text-blue-600" checked><label for="${uniqueId}" class="scratch-block ${styleClass} cursor-pointer">${escStep}</label></div>`; }
+                            });
+                            seqHtml += `</div>`;
+                        });
+                        seqHtml += `</div></div>`;
+                        targetIndex++;
+                    }
+                } else seqHtml = '<p class="text-gray-400 text-sm italic">沒有找到積木數據。</p>';
+                document.getElementById('parsedSequencesDisplay').innerHTML = seqHtml;
+                document.getElementById('targetFilterList').innerHTML = modalListHtml;
+            } catch (err) { 
+                document.getElementById('parsedSequencesDisplay').innerHTML = `<div class="text-red-500 p-4">解析失敗：${err.message}</div>`;
+            } finally { document.getElementById('parseLoading').classList.add('hidden'); fileInput.value = ''; }
+        }
+
+        async function handleManualUpload() {
+            const fileInput = document.getElementById('studentFileInput');
+            if(!fileInput.files.length) return;
+            const file = fileInput.files[0];
+            document.getElementById('studentFileNameDisplay').innerHTML = `<span class="text-green-700 font-bold">${escapeHTML(file.name)}</span>`;
+            
+            document.getElementById('emptyResultArea').classList.add('hidden');
+            const evalLoading = document.getElementById('evalLoading');
+            evalLoading.classList.remove('hidden');
+            
+            try {
+                const formData = new FormData();
+                formData.append('teacher_file', teacherFileObj);
+                formData.append('student_file', file);
+                formData.append('rules', JSON.stringify(getGradingRules()));
+
+                const res = await fetch(`${API_URL}/evaluate`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
+                const result = await res.json();
+                
+                document.getElementById('resultStudentName').innerText = `手動單筆作品：${file.name}`;
+                document.getElementById('scoreDisplay').innerText = result.score;
+                document.getElementById('feedbackDisplay').innerText = result.feedback;
+                document.getElementById('resultArea').classList.remove('hidden');
+            } catch(e) {
+                customAlert(`批改失敗: ${e.message}`, 'error');
+            } finally {
+                evalLoading.classList.add('hidden');
+            }
+        }
+
+        function openTargetFilterModal() { document.getElementById('targetFilterModal').classList.remove('hidden'); }
+        function closeTargetFilterModal() { document.getElementById('targetFilterModal').classList.add('hidden'); }
+        function setAllModalCheckboxes(checked) { document.querySelectorAll('#targetFilterList input[type="checkbox"]').forEach(cb => cb.checked = checked); }
+        function applyTargetFilter() {
+            document.querySelectorAll('#targetFilterList input[type="checkbox"]').forEach(cb => {
+                const wrapper = document.getElementById(`target-wrapper-${cb.value}`);
+                if (wrapper) {
+                    if (cb.checked) wrapper.classList.remove('hidden');
+                    else { wrapper.classList.add('hidden'); wrapper.querySelectorAll('input[type="checkbox"]').forEach(rCb => rCb.checked = false); }
+                }
+            });
+            closeTargetFilterModal();
+        }
+    </script>
+</body>
+</html>
