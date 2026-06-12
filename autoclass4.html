@@ -479,6 +479,9 @@
                 if (appMode !== 'student' || !window.fbInstances || !user) return;
                 
                 const parsed = parseStudentId(studentId);
+                let isNewHighScore = true; // 🌟 新增：用來記錄這是不是最高分
+
+                // 1. 同步寫入 Firebase (僅保留最高分)
                 if (parsed) {
                     try {
                         const { db, doc, getDoc, setDoc } = window.fbInstances;
@@ -488,7 +491,10 @@
                         let shouldSave = true;
                         if (docSnap.exists()) {
                             const oldScore = docSnap.data().score || 0;
-                            if (finalScore <= oldScore) shouldSave = false;
+                            if (finalScore <= oldScore) {
+                                shouldSave = false;
+                                isNewHighScore = false; // 分數比較低，不視為破紀錄
+                            }
                         }
 
                         if (shouldSave) {
@@ -503,21 +509,31 @@
                     } catch (e) { console.error("成績寫入 Firebase 失敗", e); }
                 }
 
+                // 2. 更新左側 UI 面板與 Classroom 即時同步
                 if (classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
                     const newSubs = [...classroomSubmissions];
+                    const currentRecordScore = newSubs[currentSubmissionIndex].score;
                     
-                    if (newSubs[currentSubmissionIndex].score === undefined || finalScore > newSubs[currentSubmissionIndex].score) {
+                    // 如果分數突破歷史紀錄，或者原本根本沒分數，才更新 UI 標籤
+                    if (currentRecordScore === undefined || finalScore > currentRecordScore) {
                         newSubs[currentSubmissionIndex].score = finalScore;
                         setClassroomSubmissions(newSubs);
+                        isNewHighScore = true;
+                    } else {
+                        isNewHighScore = false;
                     }
 
-                    if (writeBackScore) {
+                    // 🌟 核心防護：【只有在破紀錄或第一次有成績時】，才允許即時覆蓋寫入 Classroom
+                    if (writeBackScore && isNewHighScore) {
                         const sub = newSubs[currentSubmissionIndex];
                         if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
                             try {
+                                console.log(`突破最高分！正在同步 ${finalScore} 分至 Classroom...`);
                                 await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
                             } catch (e) { console.error("Classroom 成績同步失敗:", e); }
                         }
+                    } else if (writeBackScore && !isNewHighScore) {
+                        console.log(`本次分數 (${finalScore}) 未超越歷史最高分，已取消同步至 Classroom 以保護學生成績。`);
                     }
                 }
             };
