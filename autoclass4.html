@@ -48,8 +48,8 @@
 </head>
 <body class="bg-gray-100 min-h-screen p-4 overflow-y-scroll">
 
-    <!-- 整個系統容器 -->
-    <div class="max-w-7xl mx-auto w-full flex flex-col h-full overflow-hidden mt-2">
+    <!-- 🌟 整個系統容器：加入 h-[calc(100vh-2.5rem)] 精準鎖定螢幕高度 -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col h-[calc(100vh-2.5rem)] mt-2">
         
         <!-- 🟢 系統頂部導覽列 -->
         <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm shrink-0">
@@ -73,8 +73,8 @@
             </a>
         </div>
 
-        <!-- 🟢 React V6 應用程式掛載點 -->
-        <div id="root" class="bg-white shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
+        <!-- 🟢 React V6 應用程式掛載點：移除死板的白底，改用背景灰並保留圓角與陰影 -->
+        <div id="root" class="bg-gray-100 shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
     </div>
 
     <script type="text/babel">
