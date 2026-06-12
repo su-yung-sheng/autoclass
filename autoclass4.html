@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 跨模態視覺檢核系統 V6</title>
-    <!-- React 18 & Babel Standalone -->
+    <title>AI 跨模態視覺檢核系統 V6 (虛擬教室完整版)</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* 🌟 核心修復：限制捲軸樣式只套用於內部區塊，不影響 body 全域，解決排版偏移問題 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
         .score-pop { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
@@ -24,7 +24,6 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 
-    <!-- 🌟 Firebase 初始化模組 -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
@@ -48,10 +47,9 @@
 </head>
 <body class="bg-gray-100 min-h-screen p-4 overflow-y-scroll">
 
-    <!-- 🌟 整個系統容器：加入 h-[calc(100vh-2.5rem)] 精準鎖定螢幕高度 -->
+    <!-- 🌟 鎖定與前三頁絕對對齊的最外層容器 -->
     <div class="max-w-7xl mx-auto w-full flex flex-col h-[calc(100vh-2.5rem)] mt-2">
         
-        <!-- 🟢 系統頂部導覽列 -->
         <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm shrink-0">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
@@ -73,7 +71,6 @@
             </a>
         </div>
 
-        <!-- 🟢 React V6 應用程式掛載點：移除死板的白底，改用背景灰並保留圓角與陰影 -->
         <div id="root" class="bg-gray-100 shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
     </div>
 
@@ -155,8 +152,7 @@
             const [classroomSubmissions, setClassroomSubmissions] = useState([]);
             const [currentSubmissionIndex, setCurrentSubmissionIndex] = useState(-1);
             const [writeBackScore, setWriteBackScore] = useState(true);
-            // 🌟 新增：批次同步意圖狀態
-            const [gasIntent, setGasIntent] = useState('load_videos'); // 'load_videos' | 'batch_sync'
+            const [gasIntent, setGasIntent] = useState('load_videos');
 
             const videoRef = useRef(null);
             const abortControllerRef = useRef(null);
@@ -254,10 +250,9 @@
                     
                     const allFiles = data.files || [];
 
-                    // 🌟 批次同步模式：直接將查詢到的成績寫回 Classroom
                     if (gasIntent === 'batch_sync') {
                         let syncCount = 0;
-                        const processedSubs = new Set(); // 避免學生傳多個檔案導致重複寫入
+                        const processedSubs = new Set(); 
 
                         for (const f of allFiles) {
                             if (processedSubs.has(f.submissionId)) continue;
@@ -271,7 +266,6 @@
                             }
 
                             if (sid) {
-                                // 從目前顯示在成績表上的資料找尋對應學生的分數
                                 const scoreRecord = classScores.find(s => s.studentId === sid);
                                 if (scoreRecord && scoreRecord.score !== undefined) {
                                     setGasLoadingText(`同步中: 學號 ${sid} ➡️ ${scoreRecord.score}分...`);
@@ -290,10 +284,9 @@
                         setShowGasModal(false);
                         setGasIntent('load_videos');
                         setGasLoading(false);
-                        return; // 結束流程
+                        return; 
                     }
                     
-                    // 🌟 一般載入影片模式
                     const videos = allFiles.filter(f => /\.(mp4|mov|webm|avi)$/i.test(f.name));
                     
                     videos.sort((a, b) => {
@@ -479,9 +472,8 @@
                 if (appMode !== 'student' || !window.fbInstances || !user) return;
                 
                 const parsed = parseStudentId(studentId);
-                let isNewHighScore = true; // 🌟 新增：用來記錄這是不是最高分
+                let isNewHighScore = true; 
 
-                // 1. 同步寫入 Firebase (僅保留最高分)
                 if (parsed) {
                     try {
                         const { db, doc, getDoc, setDoc } = window.fbInstances;
@@ -493,7 +485,7 @@
                             const oldScore = docSnap.data().score || 0;
                             if (finalScore <= oldScore) {
                                 shouldSave = false;
-                                isNewHighScore = false; // 分數比較低，不視為破紀錄
+                                isNewHighScore = false; 
                             }
                         }
 
@@ -509,12 +501,10 @@
                     } catch (e) { console.error("成績寫入 Firebase 失敗", e); }
                 }
 
-                // 2. 更新左側 UI 面板與 Classroom 即時同步
                 if (classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
                     const newSubs = [...classroomSubmissions];
                     const currentRecordScore = newSubs[currentSubmissionIndex].score;
                     
-                    // 如果分數突破歷史紀錄，或者原本根本沒分數，才更新 UI 標籤
                     if (currentRecordScore === undefined || finalScore > currentRecordScore) {
                         newSubs[currentSubmissionIndex].score = finalScore;
                         setClassroomSubmissions(newSubs);
@@ -523,17 +513,13 @@
                         isNewHighScore = false;
                     }
 
-                    // 🌟 核心防護：【只有在破紀錄或第一次有成績時】，才允許即時覆蓋寫入 Classroom
                     if (writeBackScore && isNewHighScore) {
                         const sub = newSubs[currentSubmissionIndex];
                         if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
                             try {
-                                console.log(`突破最高分！正在同步 ${finalScore} 分至 Classroom...`);
                                 await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
                             } catch (e) { console.error("Classroom 成績同步失敗:", e); }
                         }
-                    } else if (writeBackScore && !isNewHighScore) {
-                        console.log(`本次分數 (${finalScore}) 未超越歷史最高分，已取消同步至 Classroom 以保護學生成績。`);
                     }
                 }
             };
@@ -602,39 +588,39 @@
                     if (!Array.isArray(templateSeq)) return;
                     let matched = 0; let extra = 0;
                     
-                    if (strictMode) {
-                        for (let i = 0; i < studentSeq.length; i++) {
-                            if (i < templateSeq.length) {
-                                const sVal = String(studentSeq[i]).trim();
-                                const tVal = String(templateSeq[i]).trim();
-                                
-                                if (sVal.startsWith('狀態變更') && tVal.startsWith('狀態變更')) {
-                                    const sMatch = sVal.match(/[\d.]+/);
-                                    const tMatch = tVal.match(/[\d.]+/);
-                                    if (sMatch && tMatch) {
-                                        const sRatio = parseFloat(sMatch[0]);
-                                        const tRatio = parseFloat(tMatch[0]);
-                                        if (Math.abs(sRatio - tRatio) <= 35) {
-                                            matched++;
-                                        } else {
-                                            extra++;
-                                        }
-                                    } else {
+                    for (let i = 0; i < studentSeq.length; i++) {
+                        if (i < templateSeq.length) {
+                            const sVal = String(studentSeq[i]).trim();
+                            const tVal = String(templateSeq[i]).trim();
+                            
+                            if (sVal.startsWith('狀態變更') && tVal.startsWith('狀態變更')) {
+                                const sMatch = sVal.match(/[\d.]+/);
+                                const tMatch = tVal.match(/[\d.]+/);
+                                if (sMatch && tMatch) {
+                                    const sRatio = parseFloat(sMatch[0]);
+                                    const tRatio = parseFloat(tMatch[0]);
+                                    if (Math.abs(sRatio - tRatio) <= 35) {
                                         matched++;
+                                    } else {
+                                        extra++;
                                     }
                                 } else {
+                                    matched++;
+                                }
+                            } 
+                            else {
+                                if (strictMode) {
                                     const cleanStudentStr = sVal.replace(/\s+/g, '');
                                     const cleanTemplateStr = tVal.replace(/\s+/g, '');
                                     if (cleanStudentStr === cleanTemplateStr) matched++;
                                     else extra++;
+                                } else {
+                                    matched++;
                                 }
-                            } else {
-                                extra++;
                             }
+                        } else {
+                            extra++;
                         }
-                    } else {
-                        matched = Math.min(studentSeq.length, templateSeq.length);
-                        extra = Math.max(0, studentSeq.length - templateSeq.length);
                     }
                     
                     let baseScore = templateSeq.length > 0 ? Math.round((matched / templateSeq.length) * 100) : 100;
@@ -679,7 +665,6 @@
                 setProgressInfo({ current: 0, total: 0, percent: 0 }); setStudentSequence([]);
                 setBestMatchResult(null); setQueueMsg('');
 
-                let lastValue = null; 
                 let lastTextValue = null; 
                 let lastRatioValue = null;
                 let historyList = []; let studentCurrentSeq = []; 
@@ -797,13 +782,9 @@
                                         detail: displayDetail,
                                         raw_snapshot: milestoneValue,
                                         rule_tag: ruleTag,
-                                        rule_color: ruleColor,
-                                        old_value: lastValue || "無",
-                                        new_value: actualValueToStore
+                                        rule_color: ruleColor
                                     });
                                     setResultHistory([...historyList]);
-                                    
-                                    lastValue = actualValueToStore; 
                                 }
                             } catch (e) {
                                 console.error("資料流解析異常:", e, line);
@@ -812,7 +793,7 @@
                     }
 
                     if (appMode === 'teacher') {
-                        const newTemplate = historyList.map(h => h.new_value);
+                        const newTemplate = historyList.map(h => strictMode ? (analysisEngine === 'ocr' ? h.detail.split('➡️ [ ')[1].replace(' ]','') : h.raw_snapshot) : h.raw_snapshot);
                         
                         if (newTemplate.length > 0) {
                             try {
@@ -979,7 +960,7 @@
                                     {templatePool.length > 0 && (
                                         <details className="text-[10px] bg-white rounded border border-blue-100 p-2 cursor-pointer outline-none">
                                             <summary className="font-bold text-blue-700 hover:text-blue-900 transition">👀 查看雲端範本內容</summary>
-                                            <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                                            <div className="mt-2 space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
                                                 {templatePool.map((seq, idx) => (
                                                     <div key={idx} className="bg-slate-50 p-1 rounded font-mono text-slate-600 break-all">
                                                         <span className="font-bold text-blue-500">[{idx+1}]</span> {JSON.stringify(seq)}
@@ -1202,7 +1183,7 @@
                     </div>
 
                     {/* --- 右欄：多狀態動態解碼時間軸與結算 --- */}
-                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-5 flex flex-col w-full lg:w-[28%] h-[38vh] lg:h-full overflow-y-auto shrink-0 relative bg-slate-50/50">
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-5 flex flex-col w-full lg:w-[28%] h-[38vh] lg:h-full overflow-y-auto shrink-0 relative bg-slate-50/50 custom-scrollbar">
                         <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 sticky top-0 bg-slate-50/90 backdrop-blur z-20 flex justify-between items-center">
                             <span>{appMode === 'teacher' ? '🔍 訓練資料萃取' : '🏁 動態共識決算'}</span>
                         </h3>
