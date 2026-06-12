@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 跨模態視覺檢核系統</title>
+    <title>AI 跨模態視覺檢核系統 V6 (Classroom 整合版)</title>
     <!-- React 18 & Babel Standalone -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -12,6 +12,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -45,15 +46,15 @@
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 </head>
-<body class="bg-slate-200 h-screen flex flex-col p-2 md:p-4 overflow-hidden text-slate-800">
+<body class="bg-gray-100 h-screen flex flex-col p-4 overflow-hidden text-slate-800">
 
-    <!-- 整個系統容器 (統一的陰影與圓角佈局) -->
-    <div class="max-w-[1600px] mx-auto w-full flex flex-col h-full overflow-hidden shadow-xl rounded-xl">
+    <!-- 整個系統容器 (完全對齊 a03/a04 版面與最大寬度 7xl) -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col h-full overflow-hidden mt-2">
         
         <!-- ========================================== -->
-        <!-- 🟢 系統頂部導覽列 (完全同步 a03 / a04 外觀)   -->
+        <!-- 🟢 系統頂部導覽列                           -->
         <!-- ========================================== -->
-        <div class="flex justify-center items-center bg-white p-5 border-b shrink-0">
+        <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm shrink-0">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
             </h1>
@@ -77,7 +78,7 @@
         <!-- ========================================== -->
         <!-- 🟢 React V6 應用程式掛載點                 -->
         <!-- ========================================== -->
-        <div id="root" class="bg-slate-100 flex-1 relative overflow-hidden flex flex-col"></div>
+        <div id="root" class="bg-white shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
     </div>
 
     <script type="text/babel">
@@ -145,7 +146,7 @@
             
             // 🌟 Classroom 整合狀態 🌟
             const [showGasModal, setShowGasModal] = useState(false);
-            const [gasStep, setGasStep] = useState('courses'); // courses, assignments
+            const [gasStep, setGasStep] = useState('courses'); 
             const [gasCourses, setGasCourses] = useState([]);
             const [gasAssignments, setGasAssignments] = useState([]);
             const [gasCurrentCourse, setGasCurrentCourse] = useState(null);
@@ -214,11 +215,13 @@
                         setAnalysisEngine(data.engine || 'state');
                         if (data.sensitivity) setStateSensitivity(data.sensitivity);
                         if (data.roi) setRoi(data.roi);
+                        
                         if (data.strictMode !== undefined) {
                             setStrictMode(data.strictMode);
                         } else {
                             setStrictMode(data.engine === 'ocr' || data.engine === 'color');
                         }
+                        
                         if (data.config) setConfig(data.config); 
                         setCloudSyncStatus(parsedTemplates.length > 0 ? 'synced' : 'no-template');
                     } else {
@@ -228,45 +231,35 @@
                 return () => unsubscribe();
             }, [user, firebaseReady, classCode, currentTask]);
 
-            // --- Classroom 互動區塊 ---
+            // --- Classroom 互動與成績同步區塊 ---
             const loadGasCourses = async () => {
-                setShowGasModal(true);
-                setGasStep('courses');
-                setGasLoading(true);
-                setGasLoadingText("正在讀取 Classroom 課程清單...");
+                setShowGasModal(true); setGasStep('courses'); setGasLoading(true); setGasLoadingText("正在讀取 Classroom 課程清單...");
                 try {
                     const data = await fetchJSONP(`${GAS_URL}?action=getCourses`);
                     if(data.status === 'error') throw new Error(data.message);
                     setGasCourses(data.courses || []);
-                } catch (err) {
-                    alert("課程讀取失敗: " + err.message);
-                } finally { setGasLoading(false); }
+                } catch (err) { alert("課程讀取失敗: " + err.message); } finally { setGasLoading(false); }
             };
 
             const loadGasAssignments = async (course) => {
-                setGasCurrentCourse(course);
-                setGasStep('assignments');
-                setGasLoading(true);
-                setGasLoadingText(`正在讀取「${course.name}」的作業清單...`);
+                setGasCurrentCourse(course); setGasStep('assignments'); setGasLoading(true); setGasLoadingText(`正在讀取「${course.name}」的作業清單...`);
                 try {
                     const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${course.id}`);
                     if(data.status === 'error') throw new Error(data.message);
                     setGasAssignments(data.assignments || []);
-                } catch (err) {
-                    alert("作業讀取失敗: " + err.message);
-                } finally { setGasLoading(false); }
+                } catch (err) { alert("作業讀取失敗: " + err.message); } finally { setGasLoading(false); }
             };
 
             const loadGasSubmissions = async (assignment) => {
                 setGasCurrentAssignment(assignment);
                 setGasLoading(true);
-                setGasLoadingText("正在提取影片繳交名單...");
+                setGasLoadingText("正在提取影片繳交名單與歷史成績...");
                 try {
+                    // 1. 從 GAS 獲取作業名單
                     const data = await fetchJSONP(`${GAS_URL}?action=getSubmissions&courseId=${gasCurrentCourse.id}&courseWorkId=${assignment.id}`);
                     if(data.status === 'error') throw new Error(data.message);
                     
                     const allFiles = data.files || [];
-                    // 篩選影片檔案
                     const videos = allFiles.filter(f => /\.(mp4|mov|webm|avi)$/i.test(f.name));
                     
                     videos.sort((a, b) => {
@@ -276,7 +269,37 @@
                         return a.name.localeCompare(b.name, 'zh-TW');
                     });
 
-                    setClassroomSubmissions(videos);
+                    // 2. 從 Firebase 撈取本關卡的歷史成績
+                    let scoresMap = {};
+                    if (window.fbInstances && user) {
+                        const { db, collection, getDocs } = window.fbInstances;
+                        const scoresRef = collection(db, 'VisionClassrooms', classCode.trim(), 'Scores');
+                        const snap = await getDocs(scoresRef);
+                        snap.forEach(docSnap => {
+                            const scoreData = docSnap.data();
+                            // 過濾屬於當前關卡的成績
+                            if (docSnap.id.startsWith(`${currentTask}_`)) {
+                                scoresMap[scoreData.studentId] = scoreData.score;
+                            }
+                        });
+                    }
+
+                    // 3. 把雲端成績合併進名單陣列中
+                    const mappedVideos = videos.map(v => {
+                        let sid = null;
+                        const match = v.name.match(/\d{7}/);
+                        if (match) sid = match[0];
+                        else { 
+                            const b = v.name.split('.').slice(0, -1).join('.'); 
+                            sid = b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7); 
+                        }
+                        if (sid && scoresMap[sid] !== undefined) {
+                            return { ...v, score: scoresMap[sid] };
+                        }
+                        return v;
+                    });
+
+                    setClassroomSubmissions(mappedVideos);
                     setCurrentSubmissionIndex(-1);
                     setShowGasModal(false);
                     if (videos.length === 0) alert("此作業中找不到任何學生繳交的影片檔案。");
@@ -291,7 +314,6 @@
                 setErrorMessage('');
                 setResultHistory([]); setBestMatchResult(null); setPreviewUrl(null); setVideoFile(null);
                 
-                // 解析學號
                 const match = sub.name.match(/\d{7}/);
                 if (match) setStudentId(match[0]);
                 else { const b = sub.name.split('.').slice(0, -1).join('.'); setStudentId(b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7)); }
@@ -322,7 +344,6 @@
                     const file = e.target.files[0];
                     setVideoFile(file); setPreviewUrl(URL.createObjectURL(file));
                     setStatus('idle'); setResultHistory([]); setErrorMessage(''); setBestMatchResult(null); setStudentSequence([]); setQueueMsg('');
-                    // 解除 Classroom 名單鎖定
                     setCurrentSubmissionIndex(-1);
                     if (appMode === 'student') {
                         const match = file.name.match(/\d{7}/);
@@ -331,7 +352,6 @@
                     }
                 }
             };
-
 
             const parseStudentId = (id) => {
                 if (!id || id.length !== 7) return null;
@@ -394,10 +414,10 @@
                 }
             };
 
+            // 🌟 將成績同步回 Firebase 與左側待批改名單 🌟
             const saveStudentScore = async (finalScore) => {
                 if (appMode !== 'student' || !window.fbInstances || !user) return;
                 
-                // 1. 同步寫回 Firebase 雲端儀表板
                 const parsed = parseStudentId(studentId);
                 if (parsed) {
                     try {
@@ -420,21 +440,24 @@
                                 updatedAt: new Date().toISOString()
                             }, { merge: true });
                         }
-                    } catch (e) {
-                        console.error("成績寫入 Firebase 失敗", e);
-                    }
+                    } catch (e) { console.error("成績寫入 Firebase 失敗", e); }
                 }
 
-                // 2. 🌟 同步寫回 Google Classroom (如果來源是從 Classroom 匯入的)
-                if (writeBackScore && classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
-                    const sub = classroomSubmissions[currentSubmissionIndex];
-                    if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
-                        try {
-                            console.log(`正在將 ${finalScore} 分同步至 Classroom...`);
-                            await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
-                            console.log("Classroom 成績同步完成");
-                        } catch (e) {
-                            console.error("Classroom 成績同步失敗:", e);
+                // 更新左側清單 UI 與同步回 Google Classroom
+                if (classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
+                    const newSubs = [...classroomSubmissions];
+                    
+                    if (newSubs[currentSubmissionIndex].score === undefined || finalScore > newSubs[currentSubmissionIndex].score) {
+                        newSubs[currentSubmissionIndex].score = finalScore;
+                        setClassroomSubmissions(newSubs);
+                    }
+
+                    if (writeBackScore) {
+                        const sub = newSubs[currentSubmissionIndex];
+                        if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
+                            try {
+                                await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
+                            } catch (e) { console.error("Classroom 成績同步失敗:", e); }
                         }
                     }
                 }
@@ -516,7 +539,6 @@
                                     if (sMatch && tMatch) {
                                         const sRatio = parseFloat(sMatch[0]);
                                         const tRatio = parseFloat(tMatch[0]);
-                                        // 容忍 35% 的面積差異
                                         if (Math.abs(sRatio - tRatio) <= 35) {
                                             matched++;
                                         } else {
@@ -555,7 +577,6 @@
                 setBestMatchResult(null); setProgressInfo({ current: 0, total: 0, percent: 0 });
                 setResultHistory([]); setStudentSequence([]); setQueueMsg('');
                 
-                // 如果是在 Classroom 名單中，且不是最後一個，我們可以直接幫他載入下一個！
                 if (appMode === 'student' && classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
                     if (currentSubmissionIndex < classroomSubmissions.length - 1) {
                         loadStudentVideo(classroomSubmissions[currentSubmissionIndex + 1], currentSubmissionIndex + 1);
@@ -732,7 +753,7 @@
                                         engine: analysisEngine,
                                         sensitivity: stateSensitivity,
                                         strictMode: strictMode,
-                                        config: config, 
+                                        config: config,
                                         roi: roi,
                                         updatedAt: new Date().toISOString()
                                     });
@@ -748,7 +769,7 @@
                             }
                         } else {
                             if (analysisEngine === 'motion') {
-                                setErrorMessage("⚠️ 影片中沒有偵測到轉動，未新增至題庫。\n💡 解法：請將綠色方框精準對齊馬達，並確保馬達上有標記物可供辨識。");
+                                setErrorMessage("⚠️ 影片中沒有偵測到轉動，未新增至題庫。\n💡 解法：請將綠色方框精準對齊馬達的扇葉，並確認靈敏度設為 2.0% 左右。");
                             } else {
                                 setErrorMessage("⚠️ 影片中沒有偵測到變化，因此未新增至題庫。");
                             }
@@ -846,7 +867,7 @@
                                 <div className="flex gap-2">
                                     <select value={currentTask} onChange={(e) => setCurrentTask(e.target.value)} className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-indigo-500">
                                         {taskList.length === 0 && <option value="" disabled>-- 目前無任何關卡 --</option>}
-                                        {taskList.map((task, i) => <option key={i} value={task}>{task}</option>)}
+                                        {taskList.map((task, i) => <option key={task} value={task}>{task}</option>)}
                                     </select>
                                     {appMode === 'teacher' && (
                                         <button onClick={() => setIsAddingTask(!isAddingTask)} className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${isAddingTask ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
@@ -906,7 +927,7 @@
                             )}
 
                             {/* 影片上傳區塊 */}
-                            <div className={`p-4 rounded-xl border-2 transition-colors relative flex flex-col shrink-0 ${appMode === 'student' && templatePool.length === 0 ? 'border-rose-200 bg-rose-50/50 opacity-50 pointer-events-none' : 'border-slate-200 bg-white'}`}>
+                            <div className={`p-4 rounded-xl border-2 transition-colors relative flex flex-col shrink-0 ${appMode === 'student' && templatePool.length === 0 ? 'border-rose-200 bg-rose-50/50 opacity-50 pointer-events-none' : 'border-slate-300 hover:border-indigo-400 bg-white'} ${status === 'analyzing' || status === 'queued' ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <span className="block text-xs font-bold text-slate-500 mb-3">影像樣本來源</span>
                                 
                                 {appMode === 'teacher' ? (
@@ -944,6 +965,7 @@
                                     <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar pr-1 bg-white p-2 rounded-lg border border-emerald-100 shadow-inner">
                                         {classroomSubmissions.map((sub, idx) => {
                                             const isSelected = currentSubmissionIndex === idx;
+                                            const hasScore = sub.score !== undefined;
                                             return (
                                                 <button 
                                                     key={sub.id}
@@ -954,8 +976,10 @@
                                                         {isSelected && <i className="fa-solid fa-play-circle mr-1.5 animate-pulse text-yellow-300"></i>}
                                                         {sub.name}
                                                     </span>
-                                                    {sub.score !== undefined && (
-                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] ${isSelected ? 'bg-white text-emerald-600' : 'bg-emerald-100 text-emerald-700'}`}>{sub.score}分</span>
+                                                    {hasScore ? (
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${isSelected ? 'bg-white text-emerald-600 font-black' : 'bg-emerald-100 text-emerald-700 font-black'}`}>✅ {sub.score}分</span>
+                                                    ) : (
+                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] shrink-0 ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>未批改</span>
                                                     )}
                                                 </button>
                                             );
@@ -990,20 +1014,24 @@
                                 {analysisEngine === 'motion' && (
                                     <div className="mb-3">
                                         <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1"><span>轉動觸發靈敏度</span><span>{stateSensitivity}%</span></div>
-                                        <input type="range" min="0.5" max="15" step="0.5" value={stateSensitivity} onChange={e => setStateSensitivity(parseFloat(e.target.value))} className="w-full accent-indigo-500"/>
-                                        <p className="text-[10px] text-indigo-500 mt-1.5 leading-tight font-medium bg-indigo-50 p-1.5 rounded border border-indigo-100">
-                                            💡 馬達神技：若馬達原地轉動難以辨識，請在轉軸上【貼一小塊亮色膠帶或白紙】，並將綠框緊緊包住它！
-                                        </p>
+                                        <input type="range" min="0.5" max="50" step="0.5" value={stateSensitivity} onChange={e => setStateSensitivity(parseFloat(e.target.value))} className="w-full accent-indigo-500"/>
                                     </div>
                                 )}
                                 
                                 <div className="pt-2 border-t border-slate-200 flex flex-col gap-1.5 mt-1">
                                     <label className="flex items-center text-xs font-bold text-slate-700 cursor-pointer">
-                                        <input type="checkbox" checked={strictMode} onChange={e => setStrictMode(e.target.checked)} className="mr-2 accent-indigo-500"/>
+                                        <input type="checkbox" checked={strictMode} onChange={e => setStrictMode(e.target.checked)} className="mr-2 accent-indigo-500 w-4 h-4"/>
                                         開啟嚴格特徵比對 (必開)
                                     </label>
+                                    
+                                    {!strictMode && (
+                                        <p className="text-[10px] text-rose-500 font-bold bg-rose-50 p-1.5 rounded border border-rose-200 shadow-sm animate-fadeIn">
+                                            ⚠️ 警告：關閉嚴格比對，系統將退化為「只算次數」。學生即使框錯範圍，只要雜訊閃爍次數一樣就會給滿分！強烈建議勾選。
+                                        </p>
+                                    )}
+
                                     {analysisEngine !== 'motion' && (
-                                        <label className="flex items-center text-[11px] font-bold text-slate-700 cursor-pointer">
+                                        <label className="flex items-center text-[11px] font-bold text-slate-700 cursor-pointer mt-1">
                                             <input type="checkbox" checked={config.invertColor} onChange={e => setConfig({...config, invertColor: e.target.checked})} className="mr-2 accent-indigo-500"/>
                                             黑白反轉 <span className="text-[10px] text-slate-400 font-normal ml-1">(實體燈條取消；模擬器請勾選)</span>
                                         </label>
@@ -1013,7 +1041,7 @@
                                 {appMode === 'teacher' && currentTask && (
                                     <button onClick={saveSettingsOnly} className="mt-3 w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded border border-indigo-200 transition flex items-center justify-center gap-1 shadow-sm">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                                        僅儲存目前設定至雲端 (免重新分析)
+                                        僅儲存設定 (免重新分析)
                                     </button>
                                 )}
                             </div>
@@ -1053,7 +1081,7 @@
                                  status === 'queued' ? '🛑 取消排隊' :
                                  status === 'analyzing' ? '🛑 強制中斷' : 
                                  backendStatus !== 'online' ? '⚠️ 等待伺服器連線' :
-                                 appMode === 'teacher' ? (templatePool.length > 0 ? `➕ 加入至題庫` : `🚀 初始化訓練`) : '啟動 AI 多重比對'}
+                                 appMode === 'teacher' ? (templatePool.length > 0 ? `➕ 錄製影片並新增至題庫` : `🚀 錄製影片初始化訓練`) : '啟動 AI 多重比對'}
                             </button>
                         </div>
                     </div>
@@ -1166,7 +1194,6 @@
                             </div>
                         </div>
                     )}
-
                 </div>
             );
         };
