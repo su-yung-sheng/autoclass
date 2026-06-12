@@ -269,37 +269,38 @@
                         return a.name.localeCompare(b.name, 'zh-TW');
                     });
 
-                    // 2. 從 Firebase 撈取本關卡的歷史成績
-                    let scoresMap = {};
+                    // 2. 從 Firebase 獨立撈取每位學生的歷史成績 (改用 getDoc 避免權限不足導致當機)
                     if (window.fbInstances && user) {
-                        const { db, collection, getDocs } = window.fbInstances;
-                        const scoresRef = collection(db, 'VisionClassrooms', classCode.trim(), 'Scores');
-                        const snap = await getDocs(scoresRef);
-                        snap.forEach(docSnap => {
-                            const scoreData = docSnap.data();
-                            // 過濾屬於當前關卡的成績
-                            if (docSnap.id.startsWith(`${currentTask}_`)) {
-                                scoresMap[scoreData.studentId] = scoreData.score;
+                        const { db, doc, getDoc } = window.fbInstances;
+                        const fetchPromises = videos.map(async (v) => {
+                            let sid = null;
+                            const match = v.name.match(/\d{7}/);
+                            if (match) sid = match[0];
+                            else { 
+                                const b = v.name.split('.').slice(0, -1).join('.'); 
+                                sid = b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7); 
                             }
+                            
+                            if (sid) {
+                                const parsed = parseStudentId(sid);
+                                if (parsed) {
+                                    try {
+                                        const scoreRef = doc(db, 'VisionClassrooms', classCode.trim(), 'Scores', `${currentTask}_${parsed.className}_${parsed.number}`);
+                                        const snap = await getDoc(scoreRef);
+                                        if (snap.exists() && snap.data().score !== undefined) {
+                                            v.score = snap.data().score;
+                                        }
+                                    } catch (fbError) {
+                                        console.warn("無法取得歷史成績:", fbError);
+                                    }
+                                }
+                            }
+                            return v;
                         });
+                        await Promise.all(fetchPromises);
                     }
 
-                    // 3. 把雲端成績合併進名單陣列中
-                    const mappedVideos = videos.map(v => {
-                        let sid = null;
-                        const match = v.name.match(/\d{7}/);
-                        if (match) sid = match[0];
-                        else { 
-                            const b = v.name.split('.').slice(0, -1).join('.'); 
-                            sid = b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7); 
-                        }
-                        if (sid && scoresMap[sid] !== undefined) {
-                            return { ...v, score: scoresMap[sid] };
-                        }
-                        return v;
-                    });
-
-                    setClassroomSubmissions(mappedVideos);
+                    setClassroomSubmissions(videos);
                     setCurrentSubmissionIndex(-1);
                     setShowGasModal(false);
                     if (videos.length === 0) alert("此作業中找不到任何學生繳交的影片檔案。");
