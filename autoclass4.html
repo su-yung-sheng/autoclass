@@ -48,12 +48,10 @@
 </head>
 <body class="bg-gray-100 h-screen flex flex-col p-4 overflow-hidden text-slate-800">
 
-    <!-- 整個系統容器 (完全對齊 a03/a04 版面與最大寬度 7xl) -->
+    <!-- 整個系統容器 -->
     <div class="max-w-7xl mx-auto w-full flex flex-col h-full overflow-hidden mt-2">
         
-        <!-- ========================================== -->
-        <!-- 🟢 系統頂部導覽列                           -->
-        <!-- ========================================== -->
+        <!-- 🟢 系統頂部導覽列 -->
         <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm shrink-0">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
@@ -75,9 +73,7 @@
             </a>
         </div>
 
-        <!-- ========================================== -->
-        <!-- 🟢 React V6 應用程式掛載點                 -->
-        <!-- ========================================== -->
+        <!-- 🟢 React V6 應用程式掛載點 -->
         <div id="root" class="bg-white shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
     </div>
 
@@ -118,8 +114,11 @@
             const [isAddingTask, setIsAddingTask] = useState(false);
             const [newTaskName, setNewTaskName] = useState('');
 
+            const [showScoreModal, setShowScoreModal] = useState(false);
+            const [queryClass, setQueryClass] = useState('');
+            const [classScores, setClassScores] = useState([]);
+            const [isQuerying, setIsQuerying] = useState(false); 
             const [showClearConfirm, setShowClearConfirm] = useState(false); 
-            const [showTemplateContent, setShowTemplateContent] = useState(false);
 
             const [studentId, setStudentId] = useState('');
 
@@ -144,7 +143,7 @@
             const [dragStart, setDragStart] = useState({ x: 0, y: 0, roiX: 0, roiY: 0, roiW: 0, roiH: 0 });
             const [config, setConfig] = useState({ invertColor: true }); 
             
-            // 🌟 Classroom 整合狀態 🌟
+            // 🌟 Classroom 整合狀態
             const [showGasModal, setShowGasModal] = useState(false);
             const [gasStep, setGasStep] = useState('courses'); 
             const [gasCourses, setGasCourses] = useState([]);
@@ -156,12 +155,13 @@
             const [classroomSubmissions, setClassroomSubmissions] = useState([]);
             const [currentSubmissionIndex, setCurrentSubmissionIndex] = useState(-1);
             const [writeBackScore, setWriteBackScore] = useState(true);
+            // 🌟 新增：批次同步意圖狀態
+            const [gasIntent, setGasIntent] = useState('load_videos'); // 'load_videos' | 'batch_sync'
 
             const videoRef = useRef(null);
             const abortControllerRef = useRef(null);
             const fileInputRef = useRef(null);
 
-            // --- Firebase 初始化區塊 ---
             useEffect(() => {
                 const handleFbReady = () => setFirebaseReady(true);
                 window.addEventListener('firebase-ready', handleFbReady);
@@ -215,13 +215,7 @@
                         setAnalysisEngine(data.engine || 'state');
                         if (data.sensitivity) setStateSensitivity(data.sensitivity);
                         if (data.roi) setRoi(data.roi);
-                        
-                        if (data.strictMode !== undefined) {
-                            setStrictMode(data.strictMode);
-                        } else {
-                            setStrictMode(data.engine === 'ocr' || data.engine === 'color');
-                        }
-                        
+                        if (data.strictMode !== undefined) setStrictMode(data.strictMode);
                         if (data.config) setConfig(data.config); 
                         setCloudSyncStatus(parsedTemplates.length > 0 ? 'synced' : 'no-template');
                     } else {
@@ -231,7 +225,6 @@
                 return () => unsubscribe();
             }, [user, firebaseReady, classCode, currentTask]);
 
-            // --- Classroom 互動與成績同步區塊 ---
             const loadGasCourses = async () => {
                 setShowGasModal(true); setGasStep('courses'); setGasLoading(true); setGasLoadingText("正在讀取 Classroom 課程清單...");
                 try {
@@ -253,13 +246,54 @@
             const loadGasSubmissions = async (assignment) => {
                 setGasCurrentAssignment(assignment);
                 setGasLoading(true);
-                setGasLoadingText("正在提取影片繳交名單與歷史成績...");
+                setGasLoadingText(gasIntent === 'batch_sync' ? "正在提取 Classroom 名單以進行同步..." : "正在提取影片繳交名單與歷史成績...");
+                
                 try {
-                    // 1. 從 GAS 獲取作業名單
                     const data = await fetchJSONP(`${GAS_URL}?action=getSubmissions&courseId=${gasCurrentCourse.id}&courseWorkId=${assignment.id}`);
                     if(data.status === 'error') throw new Error(data.message);
                     
                     const allFiles = data.files || [];
+
+                    // 🌟 批次同步模式：直接將查詢到的成績寫回 Classroom
+                    if (gasIntent === 'batch_sync') {
+                        let syncCount = 0;
+                        const processedSubs = new Set(); // 避免學生傳多個檔案導致重複寫入
+
+                        for (const f of allFiles) {
+                            if (processedSubs.has(f.submissionId)) continue;
+                            
+                            let sid = null;
+                            const match = f.name.match(/\d{7}/);
+                            if (match) sid = match[0];
+                            else { 
+                                const b = f.name.split('.').slice(0, -1).join('.'); 
+                                sid = b.replace(/\D/g, '').substring(0, 7) || b.substring(0, 7); 
+                            }
+
+                            if (sid) {
+                                // 從目前顯示在成績表上的資料找尋對應學生的分數
+                                const scoreRecord = classScores.find(s => s.studentId === sid);
+                                if (scoreRecord && scoreRecord.score !== undefined) {
+                                    setGasLoadingText(`同步中: 學號 ${sid} ➡️ ${scoreRecord.score}分...`);
+                                    try {
+                                        await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${assignment.id}&submissionId=${f.submissionId}&score=${scoreRecord.score}`);
+                                        syncCount++;
+                                        processedSubs.add(f.submissionId);
+                                    } catch (e) {
+                                        console.error("同步失敗:", sid, e);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        alert(`🎉 批次同步完成！共成功同步 ${syncCount} 位學生的成績至 Classroom。`);
+                        setShowGasModal(false);
+                        setGasIntent('load_videos');
+                        setGasLoading(false);
+                        return; // 結束流程
+                    }
+                    
+                    // 🌟 一般載入影片模式
                     const videos = allFiles.filter(f => /\.(mp4|mov|webm|avi)$/i.test(f.name));
                     
                     videos.sort((a, b) => {
@@ -269,7 +303,6 @@
                         return a.name.localeCompare(b.name, 'zh-TW');
                     });
 
-                    // 2. 從 Firebase 獨立撈取每位學生的歷史成績 (改用 getDoc 避免權限不足導致當機)
                     if (window.fbInstances && user) {
                         const { db, doc, getDoc } = window.fbInstances;
                         const fetchPromises = videos.map(async (v) => {
@@ -415,7 +448,33 @@
                 }
             };
 
-            // 🌟 將成績同步回 Firebase 與左側待批改名單 🌟
+            const handleQueryScores = async () => {
+                if (!queryClass) { alert("請先選擇要查詢的班級！"); return; }
+                
+                setClassScores([]); 
+                setIsQuerying(true);
+
+                try {
+                    const { db, collection, getDocs } = window.fbInstances;
+                    const scoresRef = collection(db, 'VisionClassrooms', classCode.trim(), 'Scores');
+                    const snap = await getDocs(scoresRef);
+                    let results = [];
+                    snap.forEach(docSnap => {
+                        const data = docSnap.data();
+                        if (docSnap.id.startsWith(`${currentTask}_${queryClass}_`)) {
+                            results.push(data);
+                        }
+                    });
+                    results.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+                    setClassScores(results);
+                } catch(e) { 
+                    console.error("查詢失敗", e); 
+                    alert("讀取成績失敗"); 
+                } finally {
+                    setIsQuerying(false);
+                }
+            };
+
             const saveStudentScore = async (finalScore) => {
                 if (appMode !== 'student' || !window.fbInstances || !user) return;
                 
@@ -444,7 +503,6 @@
                     } catch (e) { console.error("成績寫入 Firebase 失敗", e); }
                 }
 
-                // 更新左側清單 UI 與同步回 Google Classroom
                 if (classroomSubmissions.length > 0 && currentSubmissionIndex !== -1) {
                     const newSubs = [...classroomSubmissions];
                     
@@ -799,9 +857,9 @@
                             <div className="bg-white rounded-2xl shadow-2xl w-[600px] max-w-[90vw] overflow-hidden flex flex-col max-h-[85vh]">
                                 <div className="flex justify-between items-center bg-emerald-600 p-4">
                                     <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                                        <i className="fa-solid fa-chalkboard-user"></i> 瀏覽 Classroom 作業
+                                        <i className="fa-solid fa-chalkboard-user"></i> {gasIntent === 'batch_sync' ? '選擇要同步成績的作業' : '瀏覽 Classroom 作業'}
                                     </h3>
-                                    <button onClick={() => setShowGasModal(false)} className="text-emerald-100 hover:text-white transition"><i className="fa-solid fa-times text-2xl"></i></button>
+                                    <button onClick={() => { setShowGasModal(false); setGasIntent('load_videos'); }} className="text-emerald-100 hover:text-white transition"><i className="fa-solid fa-times text-2xl"></i></button>
                                 </div>
                                 <div className="p-3 bg-emerald-50 text-sm border-b border-emerald-200 flex flex-col gap-2 relative">
                                     <div className="flex items-center text-emerald-800 font-bold overflow-x-auto whitespace-nowrap custom-scrollbar pb-1 pr-24">
@@ -852,10 +910,11 @@
                             </div>
                         </div>
 
-                        {/* 身分切換 */}
-                        <div className="flex bg-slate-100 p-1 rounded-xl mb-4 shadow-inner shrink-0">
-                            <button onClick={() => handleModeSwitch('teacher')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${appMode === 'teacher' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🏫 教師建檔 (寫入)</button>
-                            <button onClick={() => handleModeSwitch('student')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${appMode === 'student' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🎓 學生評量 (測驗)</button>
+                        {/* 身分與功能切換 */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl mb-4 shadow-inner shrink-0 gap-1">
+                            <button onClick={() => handleModeSwitch('teacher')} className={`flex-1 py-2 text-[13px] md:text-sm font-bold rounded-lg transition-all ${appMode === 'teacher' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🏫 教師建檔</button>
+                            <button onClick={() => handleModeSwitch('student')} className={`flex-1 py-2 text-[13px] md:text-sm font-bold rounded-lg transition-all ${appMode === 'student' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🎓 學生評量</button>
+                            <button onClick={() => setShowScoreModal(true)} className={`flex-1 py-2 text-[13px] md:text-sm font-bold rounded-lg transition-all text-indigo-600 hover:bg-indigo-50`}>📊 成績查詢</button>
                         </div>
 
                         {/* 教室設定艙 */}
@@ -863,12 +922,16 @@
                             <h3 className="font-bold text-xs text-slate-700 mb-3 flex justify-between items-center">
                                 <span>🏫 虛擬教室與關卡設定</span>
                             </h3>
+                            <div className="mb-3">
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1">課程房間代碼 (跨電腦同步金鑰)</label>
+                                <input type="text" value={classCode} onChange={(e) => setClassCode(e.target.value)} placeholder="例: yssu" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"/>
+                            </div>
                             <div className="mb-1">
                                 <label className="block text-[10px] font-bold text-slate-500 mb-1">當前測驗關卡 (題庫)</label>
                                 <div className="flex gap-2">
                                     <select value={currentTask} onChange={(e) => setCurrentTask(e.target.value)} className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-indigo-500">
                                         {taskList.length === 0 && <option value="" disabled>-- 目前無任何關卡 --</option>}
-                                        {taskList.map((task, i) => <option key={task} value={task}>{task}</option>)}
+                                        {taskList.map((task, i) => <option key={i} value={task}>{task}</option>)}
                                     </select>
                                     {appMode === 'teacher' && (
                                         <button onClick={() => setIsAddingTask(!isAddingTask)} className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${isAddingTask ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
@@ -928,7 +991,7 @@
                             )}
 
                             {/* 影片上傳區塊 */}
-                            <div className={`p-4 rounded-xl border-2 transition-colors relative flex flex-col shrink-0 ${appMode === 'student' && templatePool.length === 0 ? 'border-rose-200 bg-rose-50/50 opacity-50 pointer-events-none' : 'border-slate-300 hover:border-indigo-400 bg-white'} ${status === 'analyzing' || status === 'queued' ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <div className={`p-4 rounded-xl border-2 transition-colors relative flex flex-col shrink-0 ${appMode === 'student' && templatePool.length === 0 ? 'border-rose-200 bg-rose-50/50 opacity-50 pointer-events-none' : 'border-slate-200 bg-white'}`}>
                                 <span className="block text-xs font-bold text-slate-500 mb-3">影像樣本來源</span>
                                 
                                 {appMode === 'teacher' ? (
@@ -939,7 +1002,7 @@
                                     </label>
                                 ) : (
                                     <div className="flex flex-col gap-3">
-                                        <button onClick={loadGasCourses} disabled={status === 'analyzing'} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold py-3 rounded-xl border border-emerald-300 transition flex items-center justify-center gap-2 shadow-sm text-sm active:scale-95 disabled:opacity-50">
+                                        <button onClick={() => { setGasIntent('load_videos'); loadGasCourses(); }} disabled={status === 'analyzing'} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold py-3 rounded-xl border border-emerald-300 transition flex items-center justify-center gap-2 shadow-sm text-sm active:scale-95 disabled:opacity-50">
                                             <i className="fa-solid fa-chalkboard-user"></i> 匯入 Classroom 影片名單
                                         </button>
                                         <div className="flex items-center justify-between">
@@ -1016,6 +1079,9 @@
                                     <div className="mb-3">
                                         <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1"><span>轉動觸發靈敏度</span><span>{stateSensitivity}%</span></div>
                                         <input type="range" min="0.5" max="50" step="0.5" value={stateSensitivity} onChange={e => setStateSensitivity(parseFloat(e.target.value))} className="w-full accent-indigo-500"/>
+                                        <p className="text-[10px] text-indigo-500 mt-1.5 leading-tight font-medium bg-indigo-50 p-1.5 rounded border border-indigo-100">
+                                            💡 馬達神技：若馬達原地轉動難以辨識，請在轉軸上【貼一小塊亮色膠帶或白紙】，並將綠框緊緊包住它！
+                                        </p>
                                     </div>
                                 )}
                                 
@@ -1042,7 +1108,7 @@
                                 {appMode === 'teacher' && currentTask && (
                                     <button onClick={saveSettingsOnly} className="mt-3 w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded border border-indigo-200 transition flex items-center justify-center gap-1 shadow-sm">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                                        僅儲存設定 (免重新分析)
+                                        僅儲存目前設定至雲端 (免重新分析)
                                     </button>
                                 )}
                             </div>
@@ -1183,7 +1249,7 @@
 
                     {/* 🌟 老師專用：清空題庫確認 Modal 彈窗 */}
                     {showClearConfirm && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fadeIn">
+                        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fadeIn">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
                                 <div className="mx-auto w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center text-rose-500 mb-4"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></div>
                                 <h3 className="font-bold text-lg text-slate-800 mb-2">確認清空題庫？</h3>
@@ -1195,6 +1261,73 @@
                             </div>
                         </div>
                     )}
+
+                    {/* 🌟 老師專用：班級成績查詢 Modal 彈窗 */}
+                    {showScoreModal && (
+                        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fadeIn">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
+                                <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                    <h3 className="font-bold text-lg text-slate-800">📊 班級成績查詢 - {currentTask}</h3>
+                                    <button onClick={() => setShowScoreModal(false)} className="text-slate-400 hover:text-rose-500 transition-colors bg-white rounded-full p-1 shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    </button>
+                                </div>
+                                <div className="p-4 flex gap-2 border-b border-slate-100 bg-slate-50/50">
+                                    <select value={queryClass} onChange={e => setQueryClass(e.target.value)} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 font-mono bg-white">
+                                        <option value="" disabled>請選擇班級</option>
+                                        {["701", "702", "703", "704", "705", "706", "707", "708", "709", "710", "711", "712"].map(cls => (
+                                            <option key={cls} value={cls}>{cls}</option>
+                                        ))}
+                                    </select>
+                                    <button onClick={handleQueryScores} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm">查詢</button>
+                                    {classScores.length > 0 && (
+                                        <button 
+                                            onClick={() => { setGasIntent('batch_sync'); loadGasCourses(); }} 
+                                            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 transition shadow-sm flex items-center gap-2"
+                                            title="將目前查詢到的成績批次寫回 Classroom"
+                                        >
+                                            <i className="fa-solid fa-cloud-arrow-up"></i> 批次同步 Classroom
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="p-0 flex-1 overflow-y-auto bg-white custom-scrollbar">
+                                    {isQuerying ? (
+                                        <div className="py-12 flex flex-col justify-center items-center text-indigo-600 gap-3">
+                                            <div className="loader border-t-indigo-600"></div>
+                                            <span className="font-bold text-sm">正在從 Firebase 抓取全班成績...</span>
+                                        </div>
+                                    ) : classScores.length === 0 ? (
+                                        <div className="py-12 text-center text-slate-400 text-sm">
+                                            {queryClass ? `目前找不到 ${queryClass} 班在「${currentTask}」的任何成績紀錄。` : "請在上方選擇班級並點擊查詢，系統將顯示本關卡的最高分紀錄。"}
+                                        </div>
+                                    ) : (
+                                        <table className="w-full text-left text-sm">
+                                            <thead className="bg-slate-100 text-slate-500 text-xs uppercase sticky top-0 shadow-sm">
+                                                <tr><th className="px-6 py-3 font-bold">座號</th><th className="px-6 py-3 font-bold">學號</th><th className="px-6 py-3 font-bold">最佳成績</th><th className="px-6 py-3 font-bold">最後更新時間</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {classScores.map((score, idx) => (
+                                                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                                        <td className="px-6 py-3 font-bold text-slate-700">{score.number}</td>
+                                                        <td className="px-6 py-3 font-mono text-slate-500">{score.studentId}</td>
+                                                        <td className="px-6 py-3">
+                                                            <span className={`font-bold px-2.5 py-1 rounded-full text-xs ${score.score >= 90 ? 'bg-emerald-100 text-emerald-700' : score.score >= 75 ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                                {score.score} 分
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-3 text-[10px] text-slate-400">
+                                                            {score.updatedAt ? new Date(score.updatedAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '無時間紀錄'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         };
