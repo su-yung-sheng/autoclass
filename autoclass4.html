@@ -11,16 +11,14 @@
     <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
-        /* 🌟 完美還原 a03.txt 的細捲軸樣式 (僅限定區域，不干擾全域) */
+        /* 🌟 只將細捲軸套用於系統內部面板，不影響外部 body，解決置中偏移問題 */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* 動畫效果 */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
         .score-pop { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
@@ -51,23 +49,20 @@
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 </head>
+<!-- 🌟 恢復為 a03 的 body 樣式：取消 overflow-hidden，讓瀏覽器右側保留原生捲軸，確保 mx-auto 置中對齊 -->
+<body class="bg-gray-100 min-h-screen p-4">
 
-<!-- 🌟 加上 overflow-y-scroll 確保瀏覽器原生捲軸存在，徹底消除畫面切換時的偏移 -->
-<body class="bg-gray-100 min-h-screen p-4 overflow-y-scroll text-slate-800">
-
-    <!-- 🌟 原汁原味還原 a03.txt 容器結構 (拿掉干擾置中的 w-full) -->
-    <div class="max-w-7xl mx-auto mt-2 flex flex-col h-[calc(100vh-2.5rem)]">
+    <!-- 🌟 鎖定與前三頁絕對對齊的最外層容器，高度精準扣除 padding -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col h-[calc(100vh-2.5rem)] mt-2">
         
-        <!-- ========================================== -->
-        <!-- 🟢 系統頂部導覽列 (完全還原)                 -->
-        <!-- ========================================== -->
+        <!-- 🟢 系統頂部導覽列 (完全保留原汁原味的排版與字型) -->
         <div class="flex justify-center items-center bg-white p-5 rounded-t-xl border-b shadow-sm shrink-0">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800 tracking-wide">
                 <i class="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>Classroom 自動化評分管理
             </h1>
         </div>
 
-        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto custom-scrollbar border-b border-gray-700 shrink-0">
+        <div class="bg-gray-800 px-4 pt-3 flex overflow-x-auto border-b border-gray-700 shrink-0 custom-scrollbar">
             <a href="https://su-yung-sheng.github.io/autoclass/autoclass1.html" class="px-6 py-3 font-bold border-b-4 border-transparent text-gray-300 hover:bg-gray-700 hover:text-white rounded-t-lg transition flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-brands fa-google text-lg"></i> 1. Classroom 作業管理
             </a>
@@ -82,10 +77,8 @@
             </a>
         </div>
 
-        <!-- ========================================== -->
-        <!-- 🟢 React V6 應用程式掛載點                 -->
-        <!-- ========================================== -->
-        <div id="root" class="bg-gray-100 shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col min-h-0"></div>
+        <!-- 🟢 React V6 應用程式掛載點 -->
+        <div id="root" class="bg-gray-100 shadow-xl rounded-b-xl overflow-hidden flex-1 relative flex flex-col"></div>
     </div>
 
     <script type="text/babel">
@@ -226,7 +219,11 @@
                         setAnalysisEngine(data.engine || 'state');
                         if (data.sensitivity) setStateSensitivity(data.sensitivity);
                         if (data.roi) setRoi(data.roi);
-                        if (data.strictMode !== undefined) setStrictMode(data.strictMode);
+                        if (data.strictMode !== undefined) {
+                            setStrictMode(data.strictMode);
+                        } else {
+                            setStrictMode(data.engine === 'ocr' || data.engine === 'color');
+                        }
                         if (data.config) setConfig(data.config); 
                         setCloudSyncStatus(parsedTemplates.length > 0 ? 'synced' : 'no-template');
                     } else {
@@ -309,6 +306,23 @@
                         const numB = b.name.match(/\d+/) ? parseInt(b.name.match(/\d+/)[0], 10) : 99999;
                         if (numA !== numB) return numA - numB;
                         return a.name.localeCompare(b.name, 'zh-TW');
+                    });
+
+                    // 🌟 新增：計算並標記同一個學生的多重檔案
+                    const subCountMap = {};
+                    videos.forEach(v => {
+                        const key = v.submissionId;
+                        if (key) subCountMap[key] = (subCountMap[key] || 0) + 1;
+                    });
+
+                    const subIndexMap = {};
+                    videos.forEach(v => {
+                        const key = v.submissionId;
+                        if (key && subCountMap[key] > 1) {
+                            subIndexMap[key] = (subIndexMap[key] || 0) + 1;
+                            v.multiTag = `(${subIndexMap[key]}/${subCountMap[key]})`;
+                            v.isMulti = true;
+                        }
                     });
 
                     if (window.fbInstances && user) {
@@ -532,12 +546,9 @@
                         const sub = newSubs[currentSubmissionIndex];
                         if (sub.submissionId && gasCurrentCourse && gasCurrentAssignment) {
                             try {
-                                console.log(`突破最高分！正在同步 ${finalScore} 分至 Classroom...`);
                                 await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourse.id}&courseWorkId=${gasCurrentAssignment.id}&submissionId=${sub.submissionId}&score=${finalScore}`);
                             } catch (e) { console.error("Classroom 成績同步失敗:", e); }
                         }
-                    } else if (writeBackScore && !isNewHighScore) {
-                        console.log(`本次分數 (${finalScore}) 未超越歷史最高分，已取消同步至 Classroom 以保護學生成績。`);
                     }
                 }
             };
@@ -930,7 +941,7 @@
                             </div>
                         </div>
 
-                        {/* 身分與功能切換 */}
+                        {/* 身分切換 */}
                         <div className="flex bg-slate-100 p-1 rounded-xl mb-4 shadow-inner shrink-0 gap-1">
                             <button onClick={() => handleModeSwitch('teacher')} className={`flex-1 py-2 text-[13px] md:text-sm font-bold rounded-lg transition-all ${appMode === 'teacher' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🏫 教師建檔</button>
                             <button onClick={() => handleModeSwitch('student')} className={`flex-1 py-2 text-[13px] md:text-sm font-bold rounded-lg transition-all ${appMode === 'student' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>👨‍🎓 學生評量</button>
@@ -1056,9 +1067,10 @@
                                                     onClick={() => loadStudentVideo(sub, idx)}
                                                     className={`w-full text-left p-2 rounded-lg border text-xs font-bold truncate transition flex items-center justify-between ${isSelected ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
                                                 >
-                                                    <span className="truncate pr-2">
-                                                        {isSelected && <i className="fa-solid fa-play-circle mr-1.5 animate-pulse text-yellow-300"></i>}
-                                                        {sub.name}
+                                                    <span className="flex items-center gap-1.5 truncate pr-2">
+                                                        {isSelected && <i className="fa-solid fa-play-circle animate-pulse text-yellow-300 shrink-0"></i>}
+                                                        <span className="truncate">{sub.name}</span>
+                                                        {sub.isMulti && <span className={`text-[9px] px-1 rounded border whitespace-nowrap shrink-0 ${isSelected ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-amber-100 border-amber-200 text-amber-700'}`}>多檔 {sub.multiTag}</span>}
                                                     </span>
                                                     {hasScore ? (
                                                         <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${isSelected ? 'bg-white text-emerald-600 font-black' : 'bg-emerald-100 text-emerald-700 font-black'}`}>✅ {sub.score}分</span>
@@ -1163,7 +1175,7 @@
                                     appMode === 'teacher' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'
                                 }`}
                             >
-                                {status === 'success' ? (currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? '⏭️ 自動進行下一位學生' : '🔄 重置畫面，進行下一筆') :
+                                {status === 'success' ? (currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? (classroomSubmissions[currentSubmissionIndex].submissionId === classroomSubmissions[currentSubmissionIndex + 1].submissionId ? '⏭️ 繼續批改他的下一份檔案' : '⏭️ 自動進行下一位學生') : '🔄 重置畫面，進行下一筆') :
                                  status === 'connecting' ? '建立通道中...' : 
                                  status === 'queued' ? '🛑 取消排隊' :
                                  status === 'analyzing' ? '🛑 強制中斷' : 
@@ -1232,7 +1244,7 @@
                                     </div>
 
                                     <button onClick={handleResetUI} className={`w-full text-xs font-bold transition-colors px-4 py-2.5 rounded-lg shadow-sm border ${currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-700' : 'bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 border-slate-200'}`}>
-                                        {currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? '批改下一位學生 ⏭️' : '完成檢核並重置畫面'}
+                                        {currentSubmissionIndex !== -1 && currentSubmissionIndex < classroomSubmissions.length - 1 ? (classroomSubmissions[currentSubmissionIndex].submissionId === classroomSubmissions[currentSubmissionIndex + 1].submissionId ? '批改他的下一份檔案 ⏭️' : '批改下一位學生 ⏭️') : '完成檢核並重置畫面'}
                                     </button>
                                 </div>
                             )}
