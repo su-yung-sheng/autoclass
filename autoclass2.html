@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scratch 智慧評分系統 V2</title>
+    <title>Scratch 智慧評分系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -346,7 +346,7 @@
 
         async function loadGasAssignments(courseId, courseName) {
             showGasLoading(`正在讀取「${courseName}」的作業清單...`);
-            updateGasBreadcrumb(`<span class="mx-2 text-gray-400">/</span> <span class="text-green-700 truncate">${courseName}</span>`);
+            updateGasBreadcrumb(`<span class="mx-2 text-gray-400">/</span> <span class="text-green-700 truncate max-w-[150px]">${courseName}</span>`);
             gasCurrentCourseId = courseId;
             try {
                 const data = await fetchJSONP(`${GAS_URL}?action=getAssignments&courseId=${courseId}`);
@@ -395,6 +395,13 @@
             }
         }
 
+        // 🌟 網頁載入後，直接切換到 Scratch 模組，並啟動後端連線監聽 🌟
+        window.addEventListener('DOMContentLoaded', () => { 
+            switchScratchTab('teacher');
+            checkConnection(); 
+            setInterval(checkConnection, 5000); 
+        });
+
         // --- Scratch 解算核心與 UI 處理 ---
         async function handleTeacherUpload() {
             const fileInput = document.getElementById('teacherFileInput');
@@ -411,7 +418,10 @@
 
             try {
                 const response = await fetch(`${API_URL}/parse`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
-                if(!response.ok) throw new Error(`HTTP 異常：${response.status}`);
+                if(!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `狀態碼: ${response.status}`);
+                }
                 parsedTeacherData = await response.json();
                 
                 let varsHtml = '';
@@ -426,7 +436,7 @@
                 if (parsedTeacherData.sequences && parsedTeacherData.sequences.length > 0) {
                     const grouped = {};
                     parsedTeacherData.sequences.forEach((item, idx) => {
-                        const targetName = item.target || "角色";
+                        const targetName = item.target || "全域/未命名";
                         if(!grouped[targetName]) grouped[targetName] = [];
                         grouped[targetName].push({seq: item.seq || item, originalIdx: idx});
                     });
@@ -434,10 +444,12 @@
                     let targetIndex = 0;
                     for (const [targetName, scripts] of Object.entries(grouped)) {
                         const targetId = `target-${targetIndex}`;
-                        const displayName = escapeHTML(targetName === 'Stage' || targetName === '舞台' ? '舞台' : `角色：${targetName}`); 
-                        modalListHtml += `<label class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer shadow-sm"><div class="flex items-center space-x-3"><input type="checkbox" id="modal-chk-${targetId}" value="${targetId}" class="w-5 h-5 text-blue-600" checked><span class="font-bold text-gray-700">${displayName}</span></div><span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-bold">${scripts.length} 堆疊</span></label>`;
+                        const displayName = escapeHTML(targetName === 'Stage' || targetName === '舞台' ? '舞台 (Stage)' : `角色：${targetName}`); 
+                        const iconClass = (targetName === 'Stage' || targetName === '舞台') ? 'fa-image' : 'fa-ghost';
 
-                        seqHtml += `<div id="target-wrapper-${targetId}" class="mb-5 border-2 border-blue-200 rounded-lg overflow-hidden shadow-sm bg-white"><div class="bg-blue-100 px-3 py-2 flex items-center justify-between border-b border-blue-200"><label class="flex items-center space-x-2 font-bold text-blue-800 cursor-pointer"><input type="checkbox" checked class="w-4 h-4 text-blue-600 rounded" onchange="toggleTargetBlocks('${targetId}', this.checked)"><span>${displayName}</span></label></div><div class="p-3 bg-gray-50 target-group-${targetId}">`;
+                        modalListHtml += `<label class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer shadow-sm"><div class="flex items-center space-x-3"><input type="checkbox" id="modal-chk-${targetId}" value="${targetId}" class="w-5 h-5 text-blue-600" checked><span class="font-bold text-gray-700"><i class="fa-solid ${iconClass} mr-1 text-gray-400"></i> ${displayName}</span></div><span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-bold">${scripts.length} 組</span></label>`;
+
+                        seqHtml += `<div id="target-wrapper-${targetId}" class="mb-5 border-2 border-blue-200 rounded-lg overflow-hidden shadow-sm bg-white"><div class="bg-blue-100 px-3 py-2 flex items-center justify-between border-b border-blue-200"><label class="flex items-center space-x-2 font-bold text-blue-800 cursor-pointer"><input type="checkbox" checked class="w-4 h-4 text-blue-600 rounded" onchange="toggleTargetBlocks('${targetId}', this.checked)"><span><i class="fa-solid ${iconClass} mr-1"></i> ${displayName}</span></label><span class="text-xs text-blue-600 bg-blue-200 px-2 py-1 rounded-full">${scripts.length} 組</span></div><div class="p-3 bg-gray-50 target-group-${targetId}">`;
                         
                         scripts.forEach((scriptData, idxInGroup) => {
                             seqHtml += `<div class="mb-4 bg-white p-3 rounded border shadow-sm"><div class="text-xs text-gray-400 font-bold mb-2 pb-2 border-b">腳本 ${idxInGroup + 1}</div>`;
@@ -455,12 +467,171 @@
                         seqHtml += `</div></div>`;
                         targetIndex++;
                     }
-                } else seqHtml = '<p class="text-gray-400 text-sm italic">沒有找到積木數據。</p>';
+                } else { seqHtml = '<p class="text-gray-400 text-sm italic">沒有找到可比對的積木。</p>'; modalListHtml = '<p class="text-gray-400 text-sm italic text-center py-4">無可用角色。</p>'; }
                 document.getElementById('parsedSequencesDisplay').innerHTML = seqHtml;
                 document.getElementById('targetFilterList').innerHTML = modalListHtml;
             } catch (err) { 
-                document.getElementById('parsedSequencesDisplay').innerHTML = `<div class="text-red-500 p-4">解析失敗：${err.message}</div>`;
-            } finally { document.getElementById('parseLoading').classList.add('hidden'); fileInput.value = ''; }
+                document.getElementById('parsedSequencesDisplay').innerHTML = `<div class="text-red-500 p-4 text-center font-bold bg-red-50 rounded-lg border mt-4"><i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i><br>解析失敗！<span class="text-sm font-normal text-gray-600 mt-2 block">${err.message}</span></div>`;
+            } finally { document.getElementById('parseLoading').classList.replace('flex', 'hidden'); fileInput.value = ''; }
+        }
+
+        async function fetchClassroomSubmissions(courseId, assignId, assignName) {
+            showGasLoading("正在抓取全班名單...");
+            gasCurrentCourseId = courseId;
+            gasCurrentCourseWorkId = assignId; 
+            try {
+                const data = await fetchJSONP(`${GAS_URL}?action=getSubmissions&courseId=${courseId}&courseWorkId=${assignId}`);
+                if(data.status === 'error') throw new Error(data.message);
+                closeGasFileModal();
+                document.getElementById('currentAssignmentName').innerHTML = `<i class="fa-solid fa-folder-open mr-2"></i>${assignName}`;
+                document.getElementById('emptyResultArea').classList.remove('hidden');
+                document.getElementById('resultArea').classList.add('hidden');
+
+                const allFiles = data.files || [];
+                currentStudentFiles = allFiles.filter(f => /\.sb3$/i.test(f.name));
+
+                document.getElementById('studentCount').innerText = `${currentStudentFiles.length} 份`;
+
+                let html = '';
+                if(currentStudentFiles.length === 0) {
+                    document.getElementById('gradeAllContainer').classList.remove('flex');
+                    document.getElementById('gradeAllContainer').classList.add('hidden');
+                    html = '<div class="text-center text-gray-400 py-8 h-full flex flex-col justify-center items-center"><i class="fa-solid fa-box-open text-4xl mb-2"></i><p>尚未有學生繳交 .sb3 檔案</p></div>';
+                    
+                    if (allFiles.length > 0) {
+                        customAlert("此作業有學生繳交附件，但找不到任何 .sb3 檔案！\n\n系統已自動為您過濾掉無關的圖片或文件。", "warning");
+                    }
+                } else {
+                    currentStudentFiles.sort((a, b) => {
+                        const numA = a.name.match(/\d+/) ? parseInt(a.name.match(/\d+/)[0], 10) : 99999; 
+                        const numB = b.name.match(/\d+/) ? parseInt(b.name.match(/\d+/)[0], 10) : 99999;
+                        if (numA !== numB) return numA - numB;
+                        return a.name.localeCompare(b.name, 'zh-TW'); 
+                    });
+                    document.getElementById('gradeAllContainer').classList.remove('hidden');
+                    document.getElementById('gradeAllContainer').classList.add('flex');
+                    
+                    currentStudentFiles.forEach((file, index) => {
+                        const safeName = escapeHTML(file.name);
+                        html += `<button id="stu-btn-${index}" onclick="gradeClassroomStudent('${file.id}', '${file.submissionId}', '${safeName}', 'stu-btn-${index}')" class="w-full text-left p-3 border rounded-lg hover:border-blue-400 transition flex flex-col group bg-white shadow-sm relative overflow-hidden"><div class="font-bold text-gray-700 text-sm truncate pr-12 group-hover:text-blue-700 transition"><i class="fa-solid fa-user text-gray-300 mr-2 group-hover:text-indigo-400"></i>${safeName}</div><div class="text-xs text-gray-400 mt-1 pl-6"><i class="fa-regular fa-clock mr-1"></i>${new Date(file.date).toLocaleString('zh-TW')}</div><div id="stu-score-${index}" class="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-300 transition">未批改</div></button>`;
+                    });
+                }
+                document.getElementById('workspaceStudentList').innerHTML = html;
+            } catch (err) { customAlert(`建立名單失敗: ${err.message}`, "error"); closeGasFileModal(); } finally { hideGasLoading(); }
+        }
+
+        function getGradingRules() {
+            const requiredSequences = {};
+            document.querySelectorAll('.rule-checkbox:checked').forEach(cb => {
+                const seqId = cb.getAttribute('data-seq');
+                if(seqId !== null) {
+                    if(!requiredSequences[seqId]) requiredSequences[seqId] = [];
+                    requiredSequences[seqId].push(cb.value);
+                }
+            });
+            const expectedVars = {};
+            document.querySelectorAll('.var-checkbox:checked').forEach(cb => {
+                expectedVars[cb.getAttribute('data-varname')] = cb.parentElement.querySelector('.var-expected-val').value;
+            });
+            return {
+                targetScore: parseInt(document.getElementById('customScoreInput').value) || 100,
+                strictMode: document.getElementById('strictMode').checked,
+                requiredBlocks: requiredSequences,
+                expectedVariables: expectedVars
+            };
+        }
+
+        async function gradeClassroomStudent(fileId, submissionId, fileName, btnId, isBatch = false) {
+            document.getElementById('emptyResultArea').classList.add('hidden');
+            document.getElementById('resultArea').classList.add('hidden');
+            const loading = document.getElementById('evalLoading');
+            const loadingText = document.getElementById('evalLoadingText');
+            loading.classList.remove('hidden');
+
+            document.querySelectorAll('#workspaceStudentList button').forEach(b => {
+                b.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50');
+                if(!b.classList.contains('bg-white')) b.classList.add('bg-white');
+            });
+            const activeBtn = document.getElementById(btnId);
+            if(activeBtn) { activeBtn.classList.remove('bg-white'); activeBtn.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50'); }
+            const scoreBadge = document.getElementById(btnId.replace('stu-btn', 'stu-score'));
+            if(scoreBadge) scoreBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500"></i>';
+
+            try {
+                loadingText.innerText = `正在下載 ${fileName}...`;
+                const fileData = await fetchJSONP(`${GAS_URL}?action=download&id=${fileId}`);
+                if(fileData.status === 'error') throw new Error(fileData.message);
+
+                let b64 = fileData.data;
+                if(b64.includes('base64,')) b64 = b64.split('base64,')[1];
+
+                const byteCharacters = atob(b64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+                const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'application/octet-stream'});
+                const studentFile = new File([blob], fileData.name || fileName, {type: 'application/octet-stream'});
+
+                loadingText.innerText = `正在分析比對...`;
+                const rules = getGradingRules();
+                const formData = new FormData();
+                formData.append('teacher_file', teacherFileObj);
+                formData.append('student_file', studentFile);
+                formData.append('rules', JSON.stringify(rules));
+
+                const response = await fetch(`${API_URL}/evaluate`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+
+                let writeBackMessage = "";
+                if (document.getElementById('writeBackScore').checked && submissionId) {
+                    loadingText.innerText = `正在寫入 Classroom...`;
+                    const writeData = await fetchJSONP(`${GAS_URL}?action=updateScore&courseId=${gasCurrentCourseId}&courseWorkId=${gasCurrentCourseWorkId}&submissionId=${submissionId}&score=${result.score}`);
+                    if(writeData.status === 'error') throw new Error("寫回成績失敗：" + writeData.message);
+                    writeBackMessage = "\n\n(✅ 成績已寫回 Classroom)";
+                }
+
+                document.getElementById('resultStudentName').innerHTML = `<i class="fa-solid fa-user-check text-green-500 mr-3"></i>${fileName}`;
+                document.getElementById('scoreDisplay').innerText = `${result.score}`; 
+                document.getElementById('feedbackDisplay').innerText = result.feedback + writeBackMessage;
+                document.getElementById('resultArea').classList.remove('hidden');
+
+                if(scoreBadge) {
+                    scoreBadge.innerText = `${result.score} 分`;
+                    scoreBadge.className = `absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold px-2 py-1 rounded shadow-sm ${result.score >= (rules.targetScore * 0.6) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`;
+                }
+            } catch (err) {
+                if (!isBatch) customAlert(`批改發生狀況: ${err.message}`, "error");
+                if(scoreBadge) { scoreBadge.innerText = `錯誤`; scoreBadge.className = `absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-red-500`; }
+                document.getElementById('resultStudentName').innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-500 mr-3"></i>${fileName} (異常)`;
+                document.getElementById('scoreDisplay').innerText = `X`;
+                document.getElementById('feedbackDisplay').innerText = `處理發生異常：\n${err.message}`;
+                document.getElementById('resultArea').classList.remove('hidden');
+            } finally { loading.classList.add('hidden'); }
+        }
+
+        async function gradeAllStudents() {
+            if (!teacherFileObj || !parsedTeacherData) return customAlert("請先上傳解答檔案！", "warning");
+            if (!currentStudentFiles || currentStudentFiles.length === 0) return customAlert("目前沒有學生可批改！", "warning");
+
+            const btn = document.getElementById('gradeAllBtn');
+            const btnText = document.getElementById('gradeAllText');
+            btn.disabled = true; btn.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            for (let i = 0; i < currentStudentFiles.length; i++) {
+                btnText.innerText = `批改與寫入中... (${i+1}/${currentStudentFiles.length})`;
+                const file = currentStudentFiles[i];
+                const btnId = `stu-btn-${i}`;
+                document.getElementById(btnId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                await gradeClassroomStudent(file.id, file.submissionId, escapeHTML(file.name), btnId, true);
+                await new Promise(resolve => setTimeout(resolve, 800)); 
+            }
+            
+            btn.disabled = false; btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            btnText.innerText = "一鍵批改全班完成！";
+            setTimeout(() => { btnText.innerText = "重新一鍵批改全班"; }, 4000);
+            
+            const writeMsg = document.getElementById('writeBackScore').checked ? "\n分數已自動同步至 Google Classroom！" : "";
+            customAlert("✅ 全班作業批改完畢！" + writeMsg, "success");
         }
 
         async function handleManualUpload() {
@@ -482,6 +653,8 @@
                 const res = await fetch(`${API_URL}/evaluate`, { method: 'POST', headers: {'ngrok-skip-browser-warning': 'true'}, body: formData });
                 const result = await res.json();
                 
+                if (result.error) throw new Error(result.error);
+
                 document.getElementById('resultStudentName').innerText = `手動單筆作品：${file.name}`;
                 document.getElementById('scoreDisplay').innerText = result.score;
                 document.getElementById('feedbackDisplay').innerText = result.feedback;
@@ -506,6 +679,7 @@
             });
             closeTargetFilterModal();
         }
+
     </script>
 </body>
 </html>
